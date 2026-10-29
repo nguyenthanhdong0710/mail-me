@@ -17,7 +17,7 @@ Builds on `specs/001-ai-email-assistant/spec.md`. Requirements there still apply
 ### Session 2026-10-29
 
 - Q: How does the assistant "suggest adding to calendar"? → A: The report shows the detected event with one-click "Add to Google Calendar" and "Add to Outlook calendar" links, and the email report attaches a calendar file (.ics). The user adds the event themselves. The assistant gets no calendar permission and never writes to a calendar.
-- Q: The mailbox grant is read-only, so how does the email report channel send? → A: The sending account grants a separate send-only permission through the same OAuth sign-in. That grant cannot read mail. No passwords are used.
+- Q: The mailbox grant is read-only, so how does the email report channel send? → A: The sending account grants a separate send-only permission through the same sign-in command, as its own grant. That grant cannot read mail. No passwords are used.
 - Q: How are providers without read-only OAuth supported (Yahoo, iCloud, Fastmail, Zoho, school or company servers)? → A: Password-based mailbox access stays available as a fallback for any standard mail server. It is documented as less safe than OAuth.
 - Q: Which emails does the meeting agent look at? → A: Only emails that end up IMPORTANT (including whitelisted ones). Spam and promotions are never checked for events.
 - Q: Is AI cost logging feasible? → A: Yes, as an estimate: token usage times a price per model. Prices come built in for common models and can be overridden in config.
@@ -124,7 +124,7 @@ a prefilled event with the right time, duration and link.
 4. **Given** an email that mentions a meeting but no usable time ("let's meet sometime next week"), **When** it is reported, **Then** the Event section shows "time not set" with no calendar links.
 5. **Given** an email with several events (e.g. an exam schedule), **When** it is reported, **Then** up to 3 events are listed, each with its own links, and the report says when more were left out.
 6. **Given** an email cancelling or moving a meeting, **When** it is reported, **Then** the event is marked "Cancelled" or "Rescheduled", and the assistant changes nothing in any calendar.
-7. **Given** the Scheduler fails or returns invalid output, **When** the email is reported, **Then** the report is still delivered without an Event section, and the failure is logged.
+7. **Given** the Scheduler fails or returns invalid output, **When** the email is reported, **Then** the report is still delivered without an Event section but with a one-line "event detection failed" notice, and the failure is logged.
 8. **Given** the Scheduler is disabled in config, **When** emails are processed, **Then** no event detection AI calls are made.
 9. **Given** an event whose time has already passed when the email is processed, **When** it is reported, **Then** no calendar links are offered.
 
@@ -246,7 +246,7 @@ receiving address, and that "Open original" opens the right message.
 - **FR-116**: Relative or incomplete dates MUST be worked out from the email's sent date. Times without a stated zone MUST use the configured time zone. An event without a usable date and time MUST be shown as "time not set" with no calendar links.
 - **FR-117**: For each event with a usable time that has not already passed, the report MUST offer an "Add to Google Calendar" link and an "Add to Outlook calendar" link prefilled with the event details, and the email report MUST attach a standard calendar file. These MUST be built by plain code, not by the AI.
 - **FR-118**: System MUST NOT write to, change or delete anything in any calendar, and MUST NOT request calendar permissions.
-- **FR-119**: Scheduler output MUST be validated against a strict schema. On failure, the report MUST still be delivered without an Event section and the failure MUST be logged. The email MUST NOT be held back.
+- **FR-119**: Scheduler output MUST be validated against a strict schema. On failure, the report MUST still be delivered without an Event section, with a one-line notice that event detection failed (constitution III), and the failure MUST be logged. The email MUST NOT be held back.
 - **FR-120**: Email content passed to the Scheduler MUST be treated as data, as in feature 001 FR-016. All event fields shown in reports and links MUST be escaped or encoded for their destination.
 
 **AI cost logging**

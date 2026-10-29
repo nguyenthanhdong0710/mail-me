@@ -1,10 +1,14 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 → 1.1.0 (MINOR: expanded guidance)
-- Modified principles: I. Self-Hosted & Privacy-First (report delivery channels the user opted into
-  are an allowed destination for email-derived content)
+- Version change: 1.1.0 → 1.2.0 (MINOR: expanded guidance)
+- Modified principles: II. Deterministic First (adds the Scheduler LLM role; calendar links and
+  files are plain code); V. Modular, Testable Pipeline (IO ports generalized from IMAP/SMTP to mail
+  access and mail sending)
+- Modified sections: Security & Privacy Constraints (OAuth grants and client secrets are secrets;
+  least-privilege OAuth scopes; password access is a documented fallback)
 - Added sections: none
 - Removed sections: none
+- Rationale: feature 002 (read-only OAuth via provider APIs, Scheduler agent)
 - Templates: plan/spec/tasks templates read the constitution at runtime; no edits required
 - Follow-up TODOs: none
 -->
@@ -32,8 +36,10 @@ Sync Impact Report
 - Cheap deterministic rules (whitelist, drop keywords, already-processed checks) MUST run before
   any LLM call.
 - Formatting and dispatch (the Courier) MUST be plain code with no LLM call.
-- Each LLM role (Gatekeeper, Analyst) MUST have its own configurable provider and model, so a
-  cheap model can classify and a stronger model can analyze.
+- Each LLM role (Gatekeeper, Analyst, Scheduler) MUST have its own configurable provider and
+  model, so a cheap model can classify and a stronger model can analyze.
+- Anything a user clicks or imports (calendar links, calendar files, links to the original email)
+  MUST be built by plain code from validated data, never written by an LLM.
 
 **Rationale**: This controls cost and latency and cuts down on hallucination.
 
@@ -62,8 +68,8 @@ Sync Impact Report
 
 - The pipeline MUST be made of independent modules (fetcher, rules, gatekeeper, analyst, courier,
   store, config) that communicate through typed contracts.
-- IMAP, SMTP, LLM, clock and storage MUST sit behind interfaces so that every module can be tested
-  with fakes, without network access.
+- Mail access (IMAP or a provider API), mail sending, LLM, HTTP, clock and storage MUST sit behind
+  interfaces so that every module can be tested with fakes, without network access.
 - New behavior MUST come with automated tests. Contract tests MUST cover the agent input/output
   schemas and the config schema.
 
@@ -90,8 +96,14 @@ Sync Impact Report
 
 ## Security & Privacy Constraints
 
-- Secrets (mail passwords or app passwords, API keys) MUST come from environment variables or a
-  secrets file excluded from git, never from committed config. Config refers to them by name.
+- Secrets (mail passwords or app passwords, API keys, OAuth client secrets) MUST come from
+  environment variables or a secrets file excluded from git, never from committed config. Config
+  refers to them by name.
+- OAuth grants (refresh tokens) are secrets. They MUST be stored outside git with owner-only file
+  permissions and MUST never be logged.
+- OAuth access MUST request the narrowest scope the provider offers: read-only for monitored
+  mailboxes, send-only for report delivery, and no calendar or other scopes. Password access is a
+  documented, less safe fallback for providers without such scopes.
 - IMAP and SMTP connections MUST use TLS by default.
 - The repository MUST ship an example config with no real credentials.
 - Dependencies MUST be pinned using a lockfile.
@@ -112,4 +124,4 @@ Sync Impact Report
 - Versioning: MAJOR for removing or redefining a principle, MINOR for a new principle or section,
   PATCH for clarifications.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-29
+**Version**: 1.2.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-30
