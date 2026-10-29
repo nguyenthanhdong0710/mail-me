@@ -20,10 +20,14 @@ export class ImapMailSource implements MailSource {
       auth: { user, pass: password },
       logger: false,
     });
-    await client.connect();
-    this.client = client;
-    const box = await client.mailboxOpen(mailbox, { readOnly: true });
-    return { uidValidity: Number(box.uidValidity), uidNext: box.uidNext };
+    try {
+      await client.connect();
+      this.client = client;
+      const box = await client.mailboxOpen(mailbox, { readOnly: true });
+      return { uidValidity: Number(box.uidValidity), uidNext: box.uidNext };
+    } catch (err) {
+      throw describeImapError(err);
+    }
   }
 
   async *fetchSince(afterUid: number, limit: number): AsyncIterable<RawMessage> {
@@ -60,6 +64,16 @@ export class ImapMailSource implements MailSource {
     if (!this.client) throw new Error("mailbox not open");
     return this.client;
   }
+}
+
+/**
+ * imapflow reports every rejected command as "Command failed" and keeps the server's reason
+ * (e.g. AUTHENTICATIONFAILED / "Invalid credentials") on the error, so surface it in the message.
+ */
+export function describeImapError(err: unknown): unknown {
+  const e = err as { responseText?: string; serverResponseCode?: string };
+  if (!(err instanceof Error) || !e.responseText) return err;
+  return new Error(`IMAP ${e.serverResponseCode ?? "error"}: ${e.responseText}`, { cause: err });
 }
 
 export function imapSourceFactory(accounts: AccountConfig[]): MailSourceFactory {

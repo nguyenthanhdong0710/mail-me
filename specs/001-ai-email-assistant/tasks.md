@@ -162,7 +162,7 @@ description: "Task list for AI Email Assistant (Self-hosted)"
 - [X] T050 [P] Gatekeeper evaluation script on a labeled `.eml` set (measures SC-003) in `scripts/eval-gatekeeper.ts`
 - [X] T051 [P] GitHub Actions CI: typecheck, lint, test in `.github/workflows/ci.yml`
 - [X] T052 Graceful shutdown (SIGTERM: finish the in-flight email, close IMAP and DB) in `src/index.ts` _(done with US1: SIGINT/SIGTERM waits for the current pass, then closes the DB)_
-- [ ] T053 Run the quickstart.md validation manually against a real mailbox
+- [X] T053 Run the quickstart.md validation manually against a real mailbox
 
 ---
 

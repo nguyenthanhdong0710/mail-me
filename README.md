@@ -58,8 +58,16 @@ Plan for about 15 minutes. You will:
 
 Pick one way to run it:
 
-- **Docker** with Docker Compose. Recommended for servers, NAS boxes and Raspberry Pi:
-  [Install Docker](https://docs.docker.com/get-docker/) · [Install Compose](https://docs.docker.com/compose/install/)
+- **Docker** with the Docker Compose plugin. Recommended for servers, NAS boxes and Raspberry Pi:
+  [Install Docker](https://docs.docker.com/get-docker/) · [Install Compose](https://docs.docker.com/compose/install/linux/).
+  Check with `docker compose version`. If it says `unknown command: docker compose`, or
+  `docker compose run --rm …` fails with `unknown flag: --rm`, the plugin is missing. Install it:
+  - Ubuntu's `docker.io` package: `sudo apt-get install docker-compose-v2`
+  - Docker's own apt repo (`docker-ce`): `sudo apt-get install docker-compose-plugin`
+  - Docker Desktop: already included
+
+  Or skip Compose and use the [`docker run` equivalents](#without-docker-compose).
+
 - **Node.js 22 or newer**: [nodejs.org](https://nodejs.org/)
 
 Then get the code:
@@ -154,6 +162,8 @@ For example, to use Gemini for classification:
 "gatekeeper": { "provider": "google", "model": "<gemini model id>", "api_key_env": "GOOGLE_GENERATIVE_AI_API_KEY" }
 ```
 
+If Anthropic replies "This API key is not scoped to a workspace", either create a workspace-scoped key in the Anthropic Console, or add `"workspace_id_env": "ANTHROPIC_WORKSPACE_ID"` to the `anthropic` role(s) and put the workspace ID in `.env`.
+
 **`rules`** (optional):
 
 | Field                  | Meaning                                                                                                   |
@@ -177,11 +187,19 @@ The full reference is [config.schema.md](specs/001-ai-email-assistant/contracts/
 Put one line per secret, using exactly the variable names from your `config.json`:
 
 ```bash
-SCHOOL_IMAP_PASSWORD=abcd efgh ijkl mnop     # accounts[0].imap.password_env
-SMTP_PASSWORD=wxyz wxyz wxyz wxyz            # delivery.email.smtp.password_env
-OPENAI_API_KEY=sk-...                        # ai.*.api_key_env
-TELEGRAM_BOT_TOKEN=123456789:AA...           # delivery.telegram.bot_token_env (only if enabled)
+# accounts[0].imap.password_env
+SCHOOL_IMAP_PASSWORD=abcd efgh ijkl mnop
+# delivery.email.smtp.password_env
+SMTP_PASSWORD=wxyz wxyz wxyz wxyz
+# ai.*.api_key_env
+OPENAI_API_KEY=sk-...
+# delivery.telegram.bot_token_env (only if Telegram is enabled)
+TELEGRAM_BOT_TOKEN=123456789:AA...
 ```
+
+Write values **without quotes** and keep comments on their own lines. Some Docker tools
+(`docker run --env-file`) take everything after `=` literally, so `"…"` or a trailing `# …`
+would become part of the secret.
 
 **Adding a second account:** add another object to `accounts` with its own `id` and a new
 `password_env` name (e.g. `"WORK_IMAP_PASSWORD"`). Then add `WORK_IMAP_PASSWORD=...` to `.env`.
@@ -195,6 +213,8 @@ TELEGRAM_BOT_TOKEN=123456789:AA...           # delivery.telegram.bot_token_env (
    npm ci && npm run telegram-chat-id             # Node
    docker compose run --rm mail-me telegram-chat-id   # Docker
    ```
+
+   No Compose plugin? See [Without Docker Compose](#without-docker-compose).
 
 3. Copy the printed ID into `delivery.telegram.chat_id` (as a string, e.g. `"123456789"`), and set `delivery.telegram.enabled` to `true`.
 
@@ -227,6 +247,30 @@ docker compose logs -f mail-me
 - It restarts automatically (`restart: unless-stopped`), including after a reboot once Docker starts.
 - The database lives in `./data`. Keep `storage.path` at its default `data/mail-me.db`.
 - To update: `git pull && docker compose up -d --build`.
+
+#### Without Docker Compose
+
+Plain `docker` works too. Every `docker compose run --rm mail-me <command>` in this guide becomes
+`docker run --rm … mail-me <command>` with the same env file and mounts:
+
+```bash
+docker build -t mail-me .
+mkdir -p data && sudo chown 1000:1000 data
+
+# one-off commands: telegram-chat-id, check-config, check-delivery, run-once
+docker run --rm --env-file .env \
+  -v "$PWD/config.json:/app/config.json:ro" -v "$PWD/data:/app/data" \
+  mail-me telegram-chat-id
+
+# the long-running service
+docker run -d --name mail-me --restart unless-stopped --env-file .env \
+  -v "$PWD/config.json:/app/config.json:ro" -v "$PWD/data:/app/data" \
+  mail-me
+docker logs -f mail-me
+```
+
+To update: `git pull && docker build -t mail-me . && docker rm -f mail-me`, then run the
+long-running command again.
 
 ### Option B: Node.js as a systemd service
 
@@ -288,6 +332,8 @@ On the first start, only mail that arrives **after** startup is processed (unles
 | Symptom                                                                 | Fix                                                                                                                                        |
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `Invalid config: <field> — …`                                           | The message names the exact field. Fix it in `config.json`, or set the missing variable in `.env`                                          |
+| `unknown command: docker compose` or `unknown flag: --rm`               | The Compose plugin is not installed. Install it (see [Prerequisites](#prerequisites)) or use [plain `docker run`](#without-docker-compose) |
+| `not a Telegram bot token` or `telegram getUpdates: 404 Not Found`      | The token in `.env` is wrong or has quotes around it. Write it as `TELEGRAM_BOT_TOKEN=123456789:AA...`, with no quotes                     |
 | IMAP `auth failed` / `AUTHENTICATIONFAILED`                             | Use an app password, not your normal password. Check that IMAP is allowed for the account                                                  |
 | Telegram `chat not found`                                               | Send `/start` to your bot first, then check `chat_id`                                                                                      |
 | Telegram `Unauthorized`                                                 | The bot token is wrong or was revoked. Get a new one from @BotFather                                                                       |

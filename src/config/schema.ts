@@ -86,6 +86,8 @@ const modelSchema = z
     provider: z.enum(["openai", "anthropic", "google"]),
     model: z.string().min(1),
     api_key_env: envName,
+    /** Anthropic only: workspace ID for API keys not scoped to a workspace. */
+    workspace_id_env: envName.optional(),
   })
   .strict();
 

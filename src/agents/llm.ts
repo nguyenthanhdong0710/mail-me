@@ -13,7 +13,10 @@ export function createModel(cfg: ModelConfig): LanguageModel {
     case "openai":
       return createOpenAI({ apiKey: cfg.apiKey })(cfg.model);
     case "anthropic":
-      return createAnthropic({ apiKey: cfg.apiKey })(cfg.model);
+      return createAnthropic({
+        apiKey: cfg.apiKey,
+        headers: cfg.workspaceId ? { "anthropic-workspace-id": cfg.workspaceId } : undefined,
+      })(cfg.model);
     case "google":
       return createGoogle({ apiKey: cfg.apiKey })(cfg.model);
   }

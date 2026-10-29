@@ -7,6 +7,14 @@ export class ConfigError extends Error {
   readonly exitCode = 2;
 }
 
+/** `<bot id>:<secret>` as issued by @BotFather. */
+export const TELEGRAM_TOKEN_PATTERN = /^\d+:[A-Za-z0-9_-]+$/;
+
+export function telegramTokenProblem(envName: string): string {
+  // Never echo the value: it is a secret even when malformed.
+  return `"${envName}" is not a Telegram bot token (expected <digits>:<token> from @BotFather, without quotes)`;
+}
+
 export interface AccountConfig {
   id: string;
   label: string;
@@ -20,6 +28,8 @@ export interface ModelConfig {
   provider: "openai" | "anthropic" | "google";
   model: string;
   apiKey: string;
+  /** Sent as the anthropic-workspace-id header when set. */
+  workspaceId?: string;
 }
 
 export interface EmailChannelConfig {
@@ -115,20 +125,25 @@ export function parseConfig(input: unknown, env: NodeJS.ProcessEnv = process.env
   let telegram: TelegramChannelConfig | null = null;
   if (t.enabled && t.bot_token_env && t.chat_id) {
     const botToken = secret("delivery.telegram.bot_token_env", t.bot_token_env);
-    if (botToken && !/^\d+:[A-Za-z0-9_-]+$/.test(botToken)) {
-      // Never echo the value: it is a secret even when malformed.
+    if (botToken && !TELEGRAM_TOKEN_PATTERN.test(botToken)) {
       problems.push(
-        `Invalid config: delivery.telegram.bot_token_env — "${t.bot_token_env}" is not a Telegram bot token (expected <digits>:<token> from @BotFather)`,
+        `Invalid config: delivery.telegram.bot_token_env — ${telegramTokenProblem(t.bot_token_env)}`,
       );
     }
     telegram = { botToken, chatId: t.chat_id };
   }
 
-  const model = (role: "gatekeeper" | "analyst"): ModelConfig => ({
-    provider: raw.ai[role].provider,
-    model: raw.ai[role].model,
-    apiKey: secret(`ai.${role}.api_key_env`, raw.ai[role].api_key_env),
-  });
+  const model = (role: "gatekeeper" | "analyst"): ModelConfig => {
+    const m = raw.ai[role];
+    return {
+      provider: m.provider,
+      model: m.model,
+      apiKey: secret(`ai.${role}.api_key_env`, m.api_key_env),
+      ...(m.workspace_id_env && {
+        workspaceId: secret(`ai.${role}.workspace_id_env`, m.workspace_id_env),
+      }),
+    };
+  };
   const ai = {
     gatekeeper: model("gatekeeper"),
     analyst: model("analyst"),

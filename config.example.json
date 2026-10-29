@@ -37,7 +37,7 @@
   },
   "ai": {
     "gatekeeper": { "provider": "openai", "model": "gpt-5-mini", "api_key_env": "OPENAI_API_KEY" },
-    "analyst": { "provider": "openai", "model": "gpt-5", "api_key_env": "OPENAI_API_KEY" },
+    "analyst": { "provider": "anthropic", "model": "claude-haiku-5-5", "api_key_env": "ANTHROPIC_API_KEY", "workspace_id_env": "ANTHROPIC_WORKSPACE_ID" },
     "target_language": "Vietnamese"
   },
   "rules": {

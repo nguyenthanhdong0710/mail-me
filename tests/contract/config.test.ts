@@ -74,6 +74,18 @@ describe("config schema", () => {
     expect(errorOf((c) => c.accounts.push({ ...c.accounts[0] }))).toContain("unique");
   });
 
+  it("resolves an optional Anthropic workspace id from the environment", () => {
+    const raw = rawConfig() as Json;
+    raw.ai.analyst.workspace_id_env = "ANTHROPIC_WORKSPACE_ID";
+    const c = parseConfig(raw, { ...testEnv, ANTHROPIC_WORKSPACE_ID: "wrkspc_123" });
+    expect(c.ai.analyst.workspaceId).toBe("wrkspc_123");
+    expect(c.ai.gatekeeper.workspaceId).toBeUndefined();
+    const msg = errorOf((c) => (c.ai.analyst.workspace_id_env = "ANTHROPIC_WORKSPACE_ID"));
+    expect(msg).toContain(
+      'ai.analyst.workspace_id_env — environment variable "ANTHROPIC_WORKSPACE_ID" is not set',
+    );
+  });
+
   it("reports invalid JSON from a file", () => {
     const dir = mkdtempSync(join(tmpdir(), "mail-me-"));
     const path = join(dir, "config.json");

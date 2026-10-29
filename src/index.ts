@@ -2,10 +2,16 @@
 import { readFileSync } from "node:fs";
 import dotenv from "dotenv";
 import { AiSdkLlmClient } from "./agents/llm.js";
-import { ConfigError, loadConfig, type AppConfig } from "./config/load.js";
+import {
+  ConfigError,
+  loadConfig,
+  TELEGRAM_TOKEN_PATTERN,
+  telegramTokenProblem,
+  type AppConfig,
+} from "./config/load.js";
 import { buildChannels, verifyChannels } from "./courier/channels/index.js";
 import { findChats, TelegramBotApi } from "./courier/channels/telegram/telegram-channel.js";
-import { systemClock } from "./domain/ports.js";
+import { ChannelError, systemClock } from "./domain/ports.js";
 import type { Report } from "./domain/types.js";
 import { imapSourceFactory } from "./fetcher/imap-source.js";
 import { createLogger } from "./lib/logger.js";
@@ -93,8 +99,22 @@ async function telegramChatId(path: string): Promise<number> {
     console.error(`Set ${envName} to your bot token from @BotFather first.`);
     return 2;
   }
-  const api = new TelegramBotApi(token);
-  const chats = await findChats(api);
+  if (!TELEGRAM_TOKEN_PATTERN.test(token)) {
+    console.error(telegramTokenProblem(envName));
+    return 2;
+  }
+  let chats;
+  try {
+    chats = await findChats(new TelegramBotApi(token));
+  } catch (err) {
+    // Telegram answers 401/404 for a wrong token; retryable errors are network or server trouble.
+    const hint =
+      err instanceof ChannelError && !err.retryable
+        ? `\nCheck that ${envName} is the token from @BotFather.`
+        : "";
+    console.error(`${(err as Error).message}${hint}`);
+    return 1;
+  }
   if (chats.length === 0) {
     console.log("No chats found. Open your bot in Telegram, send it /start, then run this again.");
     return 1;
