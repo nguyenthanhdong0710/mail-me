@@ -1,8 +1,9 @@
 <!--
 Sync Impact Report
-- Version change: (template) → 1.0.0
-- Modified principles: n/a (initial ratification)
-- Added sections: Core Principles I–VII, Security & Privacy Constraints, Development Workflow & Quality Gates, Governance
+- Version change: 1.0.0 → 1.1.0 (MINOR: expanded guidance)
+- Modified principles: I. Self-Hosted & Privacy-First (report delivery channels the user opted into
+  are an allowed destination for email-derived content)
+- Added sections: none
 - Removed sections: none
 - Templates: plan/spec/tasks templates read the constitution at runtime; no edits required
 - Follow-up TODOs: none
@@ -16,8 +17,11 @@ Sync Impact Report
 
 - The system MUST run fully on infrastructure the user controls, as a single process with no
   required external services other than the user's mail servers and the chosen LLM provider.
-- Email content MUST only leave the host when sent to the LLM provider the user configured.
-  There is no telemetry, analytics or third-party upload.
+- Email content MUST only leave the host when sent to the LLM provider the user configured, or to
+  report delivery channels the user explicitly enabled (e.g. email, Telegram). There is no
+  telemetry, analytics or other third-party upload.
+- Report delivery channels MUST be opt-in, and their privacy implications MUST be documented
+  (e.g. Telegram bot chats are not end-to-end encrypted).
 - Persisted email data MUST be limited to what processing needs (identifiers, classification,
   summaries, and short excerpts), and the user MUST be able to configure retention.
 
@@ -108,4 +112,4 @@ Sync Impact Report
 - Versioning: MAJOR for removing or redefining a principle, MINOR for a new principle or section,
   PATCH for clarifications.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-29
+**Version**: 1.1.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-29
