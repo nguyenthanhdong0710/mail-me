@@ -1,31 +1,34 @@
 {
+  "timezone": "Asia/Ho_Chi_Minh",
+  "auth": {
+    "grants_dir": "data/grants",
+    "google": {
+      "client_id": "1234567890-abcdefghijklmnop.apps.googleusercontent.com",
+      "client_secret_env": "GOOGLE_OAUTH_CLIENT_SECRET"
+    },
+    "microsoft": {
+      "client_id": "00000000-0000-0000-0000-000000000000",
+      "tenant": "common"
+    }
+  },
   "accounts": [
     {
       "id": "school",
       "label": "School",
       "email": "student@university.edu",
-      "imap": {
-        "host": "imap.gmail.com",
-        "port": 993,
-        "secure": true,
-        "user": "student@university.edu",
-        "password_env": "SCHOOL_IMAP_PASSWORD"
-      },
+      "provider": "gmail",
       "mailboxes": ["INBOX"],
       "lookback_hours": 0
     }
   ],
   "delivery": {
     "email": {
-      "enabled": true,
-      "to": "my_primary_email@gmail.com",
-      "smtp": {
-        "host": "smtp.gmail.com",
-        "port": 465,
-        "secure": true,
-        "user": "my_primary_email@gmail.com",
-        "password_env": "SMTP_PASSWORD",
-        "from": "Mail-Me <my_primary_email@gmail.com>"
+      "enabled": false,
+      "to": "my_primary_email@example.com",
+      "oauth": {
+        "provider": "gmail",
+        "user": "my_sending_account@gmail.com",
+        "from": "Mail-Me <my_sending_account@gmail.com>"
       }
     },
     "telegram": {
@@ -37,16 +40,28 @@
   },
   "ai": {
     "gatekeeper": { "provider": "openai", "model": "gpt-5-mini", "api_key_env": "OPENAI_API_KEY" },
-    "analyst": { "provider": "anthropic", "model": "claude-haiku-5-5", "api_key_env": "ANTHROPIC_API_KEY", "workspace_id_env": "ANTHROPIC_WORKSPACE_ID" },
+    "analyst": {
+      "provider": "anthropic",
+      "model": "claude-haiku-5-5",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "style": "brief"
+    },
+    "scheduler": {
+      "enabled": true,
+      "provider": "openai",
+      "model": "gpt-5-mini",
+      "api_key_env": "OPENAI_API_KEY"
+    },
     "target_language": "Vietnamese"
   },
+  "calendar": { "outlook_host": "outlook.live.com" },
   "rules": {
     "whitelist_domains": ["university.edu"],
     "drop_keywords": ["sale", "discount", "% off"],
     "confidence_threshold": 0.7
   },
   "schedule": { "poll_interval_seconds": 300 },
-  "limits": { "max_body_chars": 12000, "llm_concurrency": 2, "excerpt_chars": 600 },
+  "limits": { "max_body_chars": 12000, "llm_concurrency": 2 },
   "storage": { "path": "data/mail-me.db", "retention_days": 90 },
   "logging": { "level": "info" }
 }

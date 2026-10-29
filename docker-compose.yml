@@ -7,8 +7,19 @@ services:
     volumes:
       - ./config.json:/app/config.json:ro
       - ./data:/app/data
-    # Keep storage.path in config.json at its default ("data/mail-me.db") so the database
-    # lands in the ./data volume.
+    # Keep storage.path ("data/mail-me.db") and auth.grants_dir ("data/grants") at their
+    # defaults so the database and the OAuth sign-ins land in the ./data volume. Back it up and
+    # keep it private: the grants are secrets.
+    #
+    # Containers run in UTC. Set "timezone" in config.json (or TZ below) so meeting times are
+    # right.
+    # environment:
+    #   TZ: Asia/Ho_Chi_Minh
+    #
+    # One-time OAuth sign-in for a Gmail account (the browser may be on another machine):
+    #   docker compose run --rm -p 127.0.0.1:53682:53682 mail-me auth <account-id> --listen 0.0.0.0
+    # Microsoft accounts use a device code and need no port:
+    #   docker compose run --rm mail-me auth <account-id>
 
   # Local IMAP + SMTP server for `npm run test:e2e` only:
   #   docker compose --profile test up -d greenmail
