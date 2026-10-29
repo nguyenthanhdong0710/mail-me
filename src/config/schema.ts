@@ -1,18 +1,22 @@
 import { z } from "zod";
 import { sameMailbox } from "./address.js";
+import { PROVIDER_NAMES, preset, type ProviderName } from "./providers.js";
 
-// contracts/config.schema.md
+// contracts/config.schema.md (001) and specs/002-oauth-providers-calendar/contracts/config.schema.md
 
 const envName = z
   .string()
   .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "must be an environment variable name");
 
+const port = z.number().int().min(1).max(65535);
+
+/** Only for password accounts. Host, port and TLS may come from the provider preset. */
 const imapSchema = z
   .object({
-    host: z.string().min(1),
-    port: z.number().int().min(1).max(65535).default(993),
-    secure: z.boolean().default(true),
-    user: z.string().min(1),
+    host: z.string().min(1).optional(),
+    port: port.optional(),
+    secure: z.boolean().optional(),
+    user: z.string().min(1).optional(),
     password_env: envName,
   })
   .strict();
@@ -22,39 +26,103 @@ const accountSchema = z
     id: z.string().regex(/^[a-z0-9_-]+$/i, "use letters, digits, '-' or '_'"),
     label: z.string().min(1).optional(),
     email: z.email(),
-    imap: imapSchema,
+    provider: z.enum(PROVIDER_NAMES).default("custom"),
+    auth: z.enum(["oauth", "password"]).optional(),
+    imap: imapSchema.optional(),
     mailboxes: z.array(z.string().min(1)).min(1).default(["INBOX"]),
     lookback_hours: z.number().min(0).default(0),
   })
-  .strict();
+  .strict()
+  .superRefine((a, ctx) => {
+    const p = preset(a.provider);
+    const auth = a.auth ?? p.authMethods[0] ?? "password";
+    if (!(p.authMethods as readonly string[]).includes(auth)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["auth"],
+        message:
+          a.provider === "microsoft"
+            ? 'Microsoft turned off password sign-in for Outlook.com and Microsoft 365. Use "auth": "oauth"'
+            : `provider "${a.provider}" supports ${p.authMethods.map((m) => `"${m}"`).join(" or ")}, not "${auth}"`,
+      });
+      return;
+    }
+    if (auth === "oauth" && a.imap) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["imap"],
+        message: "only for password accounts; remove it for an OAuth account",
+      });
+    }
+    if (auth === "password") {
+      if (!a.imap) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["imap"],
+          message: 'required for a password account (at least "password_env")',
+        });
+      } else if (!a.imap.host && !p.imap) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["imap", "host"],
+          message: 'required unless "provider" names a preset (e.g. "yahoo")',
+        });
+      }
+    }
+  });
 
 const smtpSchema = z
   .object({
-    host: z.string().min(1),
-    port: z.number().int().min(1).max(65535).default(465),
-    secure: z.boolean().default(true),
+    provider: z.enum(PROVIDER_NAMES).optional(),
+    host: z.string().min(1).optional(),
+    port: port.optional(),
+    secure: z.boolean().optional(),
     user: z.string().min(1),
     password_env: envName,
     from: z.string().min(1).optional(),
   })
+  .strict()
+  .superRefine((s, ctx) => {
+    if (!s.host && !(s.provider && preset(s.provider).smtp)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["host"],
+        message: 'required unless "provider" names a preset with an SMTP server',
+      });
+    }
+  });
+
+const emailOAuthSchema = z
+  .object({
+    provider: z.enum(["gmail", "microsoft"]),
+    user: z.email(),
+    from: z.string().min(1).optional(),
+  })
   .strict();
 
-const emailChannelSchema = z
+const enabledEmailSchema = z
   .object({
-    enabled: z.boolean().default(false),
+    enabled: z.literal(true),
     to: z.email().optional(),
+    oauth: emailOAuthSchema.optional(),
     smtp: smtpSchema.optional(),
   })
   .strict()
   .superRefine((v, ctx) => {
-    if (!v.enabled) return;
     if (!v.to) ctx.addIssue({ code: "custom", path: ["to"], message: "required when enabled" });
-    if (!v.smtp) ctx.addIssue({ code: "custom", path: ["smtp"], message: "required when enabled" });
+    if (!v.oauth === !v.smtp) {
+      ctx.addIssue({
+        code: "custom",
+        path: [],
+        message:
+          'set exactly one sending account: "oauth" (Gmail or Microsoft, no password) or "smtp" (password)',
+      });
+    }
   });
 
-const telegramChannelSchema = z
+const enabledTelegramSchema = z
   .object({
-    enabled: z.boolean().default(false),
+    enabled: z.literal(true),
     bot_token_env: envName.optional(),
     chat_id: z
       .string()
@@ -63,12 +131,32 @@ const telegramChannelSchema = z
   })
   .strict()
   .superRefine((v, ctx) => {
-    if (!v.enabled) return;
     if (!v.bot_token_env)
       ctx.addIssue({ code: "custom", path: ["bot_token_env"], message: "required when enabled" });
     if (!v.chat_id)
       ctx.addIssue({ code: "custom", path: ["chat_id"], message: "required when enabled" });
   });
+
+/**
+ * A delivery channel whose settings are checked only when it is enabled: a disabled channel's
+ * settings are neither required nor validated (FR-125).
+ */
+function optionalChannel<T extends z.ZodType<{ enabled: true }>>(enabledSchema: T) {
+  return z
+    .looseObject({ enabled: z.boolean().default(false) })
+    .transform((v, ctx): z.infer<T> | { enabled: false } => {
+      if (!v.enabled) return { enabled: false };
+      const parsed = enabledSchema.safeParse(v);
+      if (parsed.success) return parsed.data;
+      for (const issue of parsed.error.issues) {
+        ctx.addIssue({ code: "custom", path: issue.path, message: issue.message });
+      }
+      return z.NEVER;
+    });
+}
+
+const emailChannelSchema = optionalChannel(enabledEmailSchema);
+const telegramChannelSchema = optionalChannel(enabledTelegramSchema);
 
 const deliverySchema = z
   .object({
@@ -78,21 +166,72 @@ const deliverySchema = z
   })
   .strict()
   .refine((d) => d.email.enabled || d.telegram.enabled, {
-    message: "enable at least one channel (email or telegram)",
+    message:
+      "enable at least one channel: set delivery.email.enabled or delivery.telegram.enabled to true",
   });
 
-const modelSchema = z
+const modelFields = {
+  provider: z.enum(["openai", "anthropic", "google"]),
+  model: z.string().min(1),
+  api_key_env: envName,
+  /** Anthropic only: workspace ID for API keys not scoped to a workspace. */
+  workspace_id_env: envName.optional(),
+};
+
+const modelSchema = z.object(modelFields).strict();
+
+const schedulerSchema = z
   .object({
-    provider: z.enum(["openai", "anthropic", "google"]),
-    model: z.string().min(1),
-    api_key_env: envName,
-    /** Anthropic only: workspace ID for API keys not scoped to a workspace. */
-    workspace_id_env: envName.optional(),
+    enabled: z.boolean().default(true),
+    provider: modelFields.provider.optional(),
+    model: modelFields.model.optional(),
+    api_key_env: modelFields.api_key_env.optional(),
+    workspace_id_env: modelFields.workspace_id_env,
   })
+  .strict()
+  .superRefine((s, ctx) => {
+    if (!s.enabled) return;
+    for (const field of ["provider", "model", "api_key_env"] as const) {
+      if (!s[field])
+        ctx.addIssue({ code: "custom", path: [field], message: "required when enabled" });
+    }
+  });
+
+const priceSchema = z
+  .object({ input_per_mtok: z.number().min(0), output_per_mtok: z.number().min(0) })
   .strict();
+
+const timeZone = z
+  .string()
+  .refine(isTimeZone, 'must be an IANA time zone, e.g. "Asia/Ho_Chi_Minh"');
+
+export function isTimeZone(value: string): boolean {
+  if (value === "UTC") return true;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const configSchema = z
   .object({
+    timezone: timeZone.optional(),
+    auth: z
+      .object({
+        grants_dir: z.string().min(1).default("data/grants"),
+        google: z
+          .object({ client_id: z.string().min(1), client_secret_env: envName })
+          .strict()
+          .optional(),
+        microsoft: z
+          .object({ client_id: z.string().min(1), tenant: z.string().min(1).default("common") })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .prefault({}),
     accounts: z
       .array(accountSchema)
       .min(1)
@@ -103,10 +242,20 @@ export const configSchema = z
     ai: z
       .object({
         gatekeeper: modelSchema,
-        analyst: modelSchema,
+        analyst: modelSchema.extend({ style: z.enum(["brief", "detailed"]).default("brief") }),
+        scheduler: schedulerSchema.optional(),
         target_language: z.string().min(1),
+        prices: z.record(z.string().min(1), priceSchema).default({}),
       })
       .strict(),
+    calendar: z
+      .object({
+        outlook_host: z
+          .enum(["outlook.live.com", "outlook.office.com"])
+          .default("outlook.live.com"),
+      })
+      .strict()
+      .prefault({}),
     rules: z
       .object({
         whitelist_domains: z.array(z.string().min(1)).default([]),
@@ -144,11 +293,31 @@ export const configSchema = z
   })
   .strict()
   .superRefine((cfg, ctx) => {
+    // Each OAuth provider in use needs the user's own OAuth app (research R3).
+    const needs = (oauth: "google" | "microsoft", who: string) => {
+      if (cfg.auth[oauth]) return;
+      ctx.addIssue({
+        code: "custom",
+        path: ["auth", oauth],
+        message: `required because ${who} uses OAuth with ${oauth === "google" ? "gmail" : "microsoft"}`,
+      });
+    };
+    cfg.accounts.forEach((a, i) => {
+      const p = preset(a.provider);
+      if ((a.auth ?? p.authMethods[0]) === "oauth" && p.oauthProvider) {
+        needs(p.oauthProvider, `accounts[${i}] ("${a.id}")`);
+      }
+    });
+    const e = cfg.delivery.email;
+    if (e.enabled && "oauth" in e && e.oauth) {
+      needs(e.oauth.provider === "gmail" ? "google" : "microsoft", "delivery.email.oauth");
+    }
+
     // Reports sent to a monitored mailbox would be read back in (FR-021, research R15).
-    const to = cfg.delivery.email.enabled ? cfg.delivery.email.to : undefined;
+    const to = e.enabled && "to" in e ? e.to : undefined;
     if (!to) return;
     const i = cfg.accounts.findIndex(
-      (a) => sameMailbox(to, a.email) || sameMailbox(to, a.imap.user),
+      (a) => sameMailbox(to, a.email) || (a.imap?.user ? sameMailbox(to, a.imap.user) : false),
     );
     if (i < 0) return;
     ctx.addIssue({
@@ -159,3 +328,4 @@ export const configSchema = z
   });
 
 export type RawConfig = z.infer<typeof configSchema>;
+export type { ProviderName };

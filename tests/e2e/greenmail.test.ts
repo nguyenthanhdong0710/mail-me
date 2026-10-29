@@ -2,11 +2,12 @@ import { ImapFlow } from "imapflow";
 import nodemailer from "nodemailer";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AccountConfig } from "../../src/config/load.js";
-import { EmailChannel } from "../../src/courier/channels/email/smtp-channel.js";
-import { imapSourceFactory } from "../../src/fetcher/imap-source.js";
+import { EmailChannel } from "../../src/courier/channels/email/email-channel.js";
+import { SmtpSender } from "../../src/courier/channels/email/senders.js";
+import { mailSourceFactory } from "../../src/fetcher/index.js";
 import { createLogger } from "../../src/lib/logger.js";
 import { Pipeline } from "../../src/orchestrator/pipeline.js";
-import { runOnce } from "../../src/orchestrator/scheduler.js";
+import { runOnce } from "../../src/orchestrator/poller.js";
 import { SqliteStore } from "../../src/store/sqlite-store.js";
 import { testConfig } from "../fakes/config.js";
 import { FakeClock, FakeLlm } from "../fakes/index.js";
@@ -77,20 +78,16 @@ describe.skipIf(!process.env.E2E)("e2e: GreenMail IMAP + SMTP", () => {
   const store = new SqliteStore(":memory:");
   const llm = new FakeLlm();
   const channel = new EmailChannel(
-    {
-      to: "me@primary.example",
-      from: "Mail-Me <me@primary.example>",
-      smtp: { ...config.delivery.email!.smtp },
-    },
+    { to: "me@primary.example", from: "Mail-Me <me@primary.example>" },
     store.getInstallId(),
-    smtp,
+    new SmtpSender(config.delivery.email!.smtp!, smtp),
   );
   const pipeline = new Pipeline({
     config: { ...config, accounts: [account] },
     store,
     llm,
     channels: new Map([["email", channel]]),
-    sources: imapSourceFactory([account]),
+    sources: mailSourceFactory([account]),
     clock: new FakeClock(),
     logger: createLogger({ level: "silent" }),
     retry: { attempts: 2, sleep: async () => {} },
@@ -144,7 +141,7 @@ describe.skipIf(!process.env.E2E)("e2e: GreenMail IMAP + SMTP", () => {
       store,
       llm,
       channels: new Map([["email", channel]]),
-      sources: imapSourceFactory([account]),
+      sources: mailSourceFactory([account]),
       clock: new FakeClock(),
       logger: createLogger({ level: "silent" }),
     });

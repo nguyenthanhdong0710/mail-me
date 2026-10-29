@@ -1,0 +1,28 @@
+From: Organizer <organizer@company.com>
+To: student@university.edu
+Subject: Invitation: Team offsite
+Date: Mon, 02 Nov 2026 09:00:00 +0700
+Message-ID: <all-day-invite@company.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOUNDARY42"
+
+--BOUNDARY42
+Content-Type: text/plain; charset=utf-8
+
+Offsite.
+--BOUNDARY42
+Content-Type: text/calendar; charset=utf-8; method=REQUEST
+Content-Disposition: attachment; filename="invite.ics"
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+UID:a1@x
+DTSTART;VALUE=DATE:20261110
+DTEND;VALUE=DATE:20261112
+SUMMARY:Team offsite
+END:VEVENT
+END:VCALENDAR
+--BOUNDARY42--

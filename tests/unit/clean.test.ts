@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  sanitizeName,
   normalizeWhitespace,
   parseAndClean,
   stripQuotedReplies,
@@ -76,5 +77,34 @@ describe("text helpers", () => {
   it("does not split a surrogate pair", () => {
     const r = truncate("ab😀cd", 3);
     expect(r).toEqual({ text: "ab", truncated: true });
+  });
+});
+
+describe("recipients and sent time (FR-128)", () => {
+  const opts = { maxBodyChars: 12_000, fallbackDate: new Date() };
+
+  it("parses To and Cc with lower-cased addresses and sanitized names", async () => {
+    const e = await parseAndClean(fixture("multi-recipient.eml"), opts);
+    expect(e.to).toHaveLength(7);
+    expect(e.to[0]).toEqual({ name: "Alice", address: "alice@university.edu" });
+    expect(e.to[2]).toEqual({ address: "bob@university.edu" });
+    expect(e.cc).toEqual([{ name: "TA Office", address: "ta@university.edu" }]);
+    expect(e.to[3]!.name!.length).toBeLessThanOrEqual(64);
+  });
+
+  it("strips control characters and caps long names", () => {
+    expect(sanitizeName("Ali\u0007ce‮  Smith")).toBe("Alice Smith");
+    expect(sanitizeName("x".repeat(100))).toHaveLength(64);
+  });
+
+  it("keeps the sender's UTC offset in sentAt", async () => {
+    const e = await parseAndClean(fixture("multi-recipient.eml"), opts);
+    expect(e.sentAt).toBe("2026-11-02T09:15:00.000+07:00");
+  });
+
+  it("returns no recipients for undisclosed mail", async () => {
+    const e = await parseAndClean(fixture("undisclosed.eml"), opts);
+    expect(e.to).toEqual([]);
+    expect(e.cc).toEqual([]);
   });
 });

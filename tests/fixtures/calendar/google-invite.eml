@@ -1,0 +1,32 @@
+From: Organizer <organizer@company.com>
+To: student@university.edu
+Subject: Invitation: Design review @ Thu 5 Nov 2026 3pm
+Date: Mon, 02 Nov 2026 09:00:00 +0700
+Message-ID: <google-invite@company.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOUNDARY42"
+
+--BOUNDARY42
+Content-Type: text/plain; charset=utf-8
+
+You have been invited.
+--BOUNDARY42
+Content-Type: text/calendar; charset=utf-8; method=REQUEST
+Content-Disposition: attachment; filename="invite.ics"
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+UID:g1@google.com
+DTSTART:20261105T080000Z
+DTEND:20261105T090000Z
+SUMMARY:Design review
+LOCATION:Room 3A
+X-GOOGLE-CONFERENCE:https://meet.google.com/abc-defg-hij
+SEQUENCE:0
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR
+--BOUNDARY42--

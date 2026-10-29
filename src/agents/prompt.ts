@@ -15,7 +15,10 @@ export function loadPrompt(name: string): string {
 
 /** Keeps untrusted content from closing or opening our data tags (research R5). */
 export function neutralizeTags(value: string): string {
-  return value.replace(/<(\/?)(email|from|subject|body|attachments|truncated)\b/gi, "‹$1$2");
+  return value.replace(
+    /<(\/?)(email|from|subject|body|attachments|truncated|sent_at|user_timezone)\b/gi,
+    "‹$1$2",
+  );
 }
 
 export function emailBlock(email: {

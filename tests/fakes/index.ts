@@ -16,10 +16,16 @@ import type { ChannelName, LlmUsage, Report } from "../../src/domain/types.js";
 
 // ---------------------------------------------------------------- mail server
 
+interface FakeMessage {
+  uid: number;
+  source: Buffer;
+  internalDate: Date;
+}
+
 interface FakeMailbox {
   uidValidity: number;
   nextUid: number;
-  messages: RawMessage[];
+  messages: FakeMessage[];
 }
 
 /** In-memory IMAP stand-in shared by every FakeMailSource it creates. */
@@ -43,7 +49,7 @@ export class FakeMailServer {
     accountId: string,
     eml: string | Buffer,
     opts: { mailbox?: string; date?: Date } = {},
-  ): number {
+  ): string {
     const b = this.box(accountId, opts.mailbox ?? "INBOX");
     const uid = b.nextUid++;
     b.messages.push({
@@ -51,7 +57,7 @@ export class FakeMailServer {
       source: Buffer.isBuffer(eml) ? eml : Buffer.from(eml),
       internalDate: opts.date ?? new Date(),
     });
-    return uid;
+    return String(uid);
   }
 
   /** Simulates a server-side UIDVALIDITY reset: same messages, new UIDs. */
@@ -70,19 +76,23 @@ export class FakeMailServer {
           const failure = this.openFailures.get(accountId);
           if (failure) throw failure;
           current = this.box(accountId, mailbox);
-          return { uidValidity: current.uidValidity, uidNext: current.nextUid };
+          return { generation: String(current.uidValidity), head: String(current.nextUid - 1) };
         },
-        fetchSince: (afterUid, limit) => {
+        fetchSince: (cursor, limit) => {
           this.fetchCalls.push(accountId);
           const box = current;
-          return (async function* () {
+          const afterUid = Number(cursor);
+          return (async function* (): AsyncGenerator<RawMessage> {
             if (!box) throw new Error("mailbox not open");
-            yield* box.messages.filter((m) => m.uid > afterUid).slice(0, limit);
+            for (const m of box.messages.filter((x) => x.uid > afterUid).slice(0, limit)) {
+              const id = String(m.uid);
+              yield { id, cursor: id, source: m.source, internalDate: m.internalDate };
+            }
           })();
         },
-        firstUidSince: async (since) => {
+        cursorSince: async (since) => {
           const m = current?.messages.find((x) => x.internalDate >= since);
-          return m ? m.uid : null;
+          return m ? String(m.uid - 1) : null;
         },
         close: async () => {
           current = null;
@@ -203,12 +213,22 @@ export class FakeLlm implements LlmClient {
     this.handlers = {
       gatekeeper: handlers.gatekeeper ?? (() => important()),
       analyst: handlers.analyst ?? (() => analysis()),
+      scheduler: handlers.scheduler ?? (() => ({ events: [] })),
     };
   }
 
   callsFor(role: LlmRole): number {
     return this.calls.filter((c) => c.role === role).length;
   }
+
+  /** Usage returned for every call; tests change it to check cost totals. */
+  usage: Omit<LlmUsage, "model"> & { model?: string } = {
+    input: 100,
+    output: 20,
+    provider: "openai",
+    ms: 5,
+    costUsd: 0.0001,
+  };
 
   async generate<T>(
     role: LlmRole,
@@ -218,7 +238,7 @@ export class FakeLlm implements LlmClient {
     const raw = this.handlers[role](args);
     const parsed = args.schema.safeParse(raw);
     if (!parsed.success) throw new LlmError(`invalid ${role} output`);
-    return { value: parsed.data, usage: { input: 100, output: 20 } };
+    return { value: parsed.data, usage: { model: `${role}-model`, ...this.usage } };
   }
 }
 
@@ -259,7 +279,7 @@ export class FakeClock implements Clock {
 
 export function sampleReport(overrides: Partial<Report> = {}): Report {
   return {
-    key: { accountId: "school", mailbox: "INBOX", uidValidity: 1, uid: 5 },
+    key: { accountId: "school", mailbox: "INBOX", uidValidity: "1", uid: "5" },
     source: { accountId: "school", label: "School" },
     original: {
       messageId: "<orig@university.edu>",

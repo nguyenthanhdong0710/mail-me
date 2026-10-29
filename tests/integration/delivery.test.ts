@@ -19,6 +19,7 @@ function draftFor(report: Report): DraftRecord {
     confidence: 0.9,
     tokensIn: 120,
     tokensOut: 40,
+    costUsd: null,
   };
 }
 
@@ -144,7 +145,7 @@ describe("dispatcher (FR-024)", () => {
   });
 
   it("marks a fallback report FALLBACK_FORWARDED", async () => {
-    const fb = sampleReport({ key: { ...report.key, uid: 6 }, kind: "FALLBACK", analysis: null });
+    const fb = sampleReport({ key: { ...report.key, uid: "6" }, kind: "FALLBACK", analysis: null });
     store.savePendingReport(fb, draftFor(fb), ["email"]);
     await drain();
     expect(store.getProcessed(fb.key)?.outcome).toBe("FALLBACK_FORWARDED");

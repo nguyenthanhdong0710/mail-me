@@ -6,6 +6,7 @@ import {
   type IncomingEmail,
   type LlmUsage,
 } from "../domain/types.js";
+import type { Logger } from "../lib/logger.js";
 import { retry, type RetryOptions } from "../lib/retry.js";
 import { emailBlock, loadPrompt } from "./prompt.js";
 
@@ -33,7 +34,7 @@ export function effectiveCategory(
 export async function classify(
   llm: LlmClient,
   email: Pick<IncomingEmail, "from" | "subject" | "text">,
-  opts: { threshold: number; retry?: RetryOptions },
+  opts: { threshold: number; retry?: RetryOptions; log?: Logger },
 ): Promise<GatekeeperVerdict> {
   try {
     const { value, usage } = await retry(
@@ -42,6 +43,7 @@ export async function classify(
           system: loadPrompt("gatekeeper.v1"),
           user: emailBlock(email),
           schema: ClassificationSchema,
+          log: opts.log,
         }),
       opts.retry,
     );

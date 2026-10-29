@@ -2,8 +2,12 @@
 import { readFileSync } from "node:fs";
 import dotenv from "dotenv";
 import { AiSdkLlmClient } from "./agents/llm.js";
+import { PRICES_AS_OF } from "./agents/prices.js";
+import { parseAuthArgs, runAuth, terminalIO } from "./auth/cli.js";
+import { createOAuthWiring, type OAuthWiring } from "./auth/wiring.js";
 import {
   ConfigError,
+  grantRefs,
   loadConfig,
   TELEGRAM_TOKEN_PATTERN,
   telegramTokenProblem,
@@ -13,10 +17,11 @@ import { buildChannels, verifyChannels } from "./courier/channels/index.js";
 import { findChats, TelegramBotApi } from "./courier/channels/telegram/telegram-channel.js";
 import { ChannelError, systemClock } from "./domain/ports.js";
 import type { Report } from "./domain/types.js";
-import { imapSourceFactory } from "./fetcher/imap-source.js";
+import { mailSourceFactory } from "./fetcher/index.js";
+import { logStartupNotices } from "./config/notices.js";
 import { createLogger } from "./lib/logger.js";
 import { Pipeline } from "./orchestrator/pipeline.js";
-import { runOnce, startRetentionJob, startScheduler } from "./orchestrator/scheduler.js";
+import { runOnce, startRetentionJob, startPolling } from "./orchestrator/poller.js";
 import { SqliteStore } from "./store/sqlite-store.js";
 
 const USAGE = `Usage: mail-me <command> [--config path]
@@ -26,6 +31,11 @@ Commands:
   run-once       Poll all accounts once and exit (for cron / systemd timers)
   check-config   Validate the config and secrets, then exit
   check-delivery Send a test report to every enabled delivery channel
+  auth <account-id> [--port 53682] [--listen 127.0.0.1]
+                 Sign in an OAuth account (read-only mail access)
+  auth --email-channel
+                 Sign in the email channel's sending account (send-only)
+  auth --status  List OAuth sign-ins and when they were last renewed
   telegram-chat-id
                  List the chats that have messaged your Telegram bot (send it /start first)`;
 
@@ -38,15 +48,23 @@ function configPath(argv: string[]): string {
 function testReport(config: AppConfig): Report {
   const now = new Date().toISOString();
   return {
-    key: { accountId: "check-delivery", mailbox: "INBOX", uidValidity: 0, uid: 0 },
+    key: { accountId: "check-delivery", mailbox: "INBOX", uidValidity: "0", uid: "0" },
     source: { accountId: "check-delivery", label: "Mail-Me setup check" },
     original: {
       messageId: null,
       from: { name: "Mail-Me", address: "mail-me@localhost" },
       subject: "Test report",
       receivedAt: now,
+      to: { shown: config.accounts.slice(0, 5).map((a) => ({ address: a.email })), more: 0 },
+      cc: { shown: [], more: 0 },
+      deliveredTo: config.accounts[0]!.email,
+      addressedToYou: true,
+      webLink: null,
     },
     kind: "SUMMARY",
+    style: config.ai.analystStyle,
+    timezone: config.timezone,
+    events: [],
     analysis: {
       original_language: "English",
       summary: `Delivery works. Real reports will be summarized in ${config.ai.targetLanguage}.`,
@@ -61,9 +79,9 @@ function testReport(config: AppConfig): Report {
   };
 }
 
-async function checkDelivery(config: AppConfig): Promise<number> {
+async function checkDelivery(config: AppConfig, oauth: OAuthWiring): Promise<number> {
   const store = new SqliteStore(config.storage.path);
-  const channels = buildChannels(config, store.getInstallId());
+  const channels = buildChannels(config, store.getInstallId(), oauth.sender);
   store.close();
   let failures = 0;
   for (const channel of channels.values()) {
@@ -133,7 +151,30 @@ async function main(argv: string[]): Promise<number> {
   dotenv.config({ quiet: true });
 
   if (command === "telegram-chat-id") return telegramChatId(configPath(argv));
-  const config = loadConfig(configPath(argv));
+  // `auth` exists to create missing grants, so it skips the grant checks (auth-cli.contract.md).
+  const config = loadConfig(configPath(argv), process.env, { checkGrants: command !== "auth" });
+  const secrets = new Set(config.secrets);
+  const oauth = createOAuthWiring(config, { addSecret: (v) => secrets.add(v) });
+
+  if (command === "auth") {
+    const args = parseAuthArgs(argv.slice(1));
+    const io = terminalIO();
+    try {
+      return await runAuth(args, {
+        config,
+        io,
+        store: oauth.grants,
+        client: (provider, a) =>
+          oauth.client(provider, {
+            port: a.port,
+            listen: a.listen,
+            loginHint: config.accounts.find((x) => x.id === a.accountId)?.email,
+          }),
+      });
+    } finally {
+      io.close();
+    }
+  }
   if (command === "check-config") {
     console.log(
       `Config OK: ${config.accounts.length} account(s), channels: ${[
@@ -143,25 +184,36 @@ async function main(argv: string[]): Promise<number> {
         .filter(Boolean)
         .join(", ")}`,
     );
+    for (const { path, ref } of grantRefs(config)) {
+      const grant = oauth.grants.read(ref.name);
+      console.log(
+        `  ${path}: signed in as ${grant?.address}, ${ref.purpose === "read" ? "read-only" : "send-only"}, renewed ${grant?.updatedAt}`,
+      );
+    }
     return 0;
   }
-  if (command === "check-delivery") return checkDelivery(config);
+  if (command === "check-delivery") return checkDelivery(config, oauth);
   if (command !== "start" && command !== "run-once") {
     console.error(`Unknown command "${command}"\n\n${USAGE}`);
     return 1;
   }
 
-  const logger = createLogger({ level: config.logLevel, secrets: config.secrets });
+  const logger = createLogger({ level: config.logLevel, secrets });
+  logStartupNotices(config, logger);
   const store = new SqliteStore(config.storage.path);
-  const channels = buildChannels(config, store.getInstallId());
+  const channels = buildChannels(config, store.getInstallId(), oauth.sender);
   await verifyChannels(channels, logger);
 
   const pipeline = new Pipeline({
     config,
     store,
-    llm: new AiSdkLlmClient(config.ai, config.limits.llm_concurrency),
+    llm: new AiSdkLlmClient(config.ai, {
+      concurrency: config.limits.llm_concurrency,
+      prices: config.ai.prices,
+      logger,
+    }),
     channels,
-    sources: imapSourceFactory(config.accounts),
+    sources: mailSourceFactory(config.accounts, oauth.source),
     clock: systemClock,
     logger,
   });
@@ -174,11 +226,16 @@ async function main(argv: string[]): Promise<number> {
   }
 
   logger.info(
-    { accounts: config.accounts.map((a) => a.id), intervalSeconds: config.pollIntervalSeconds },
+    {
+      accounts: config.accounts.map((a) => a.id),
+      intervalSeconds: config.pollIntervalSeconds,
+      pricesAsOf: PRICES_AS_OF,
+      note: "costs are estimates",
+    },
     "mail-me started",
   );
   const stopRetention = startRetentionJob(store, config.storage.retention_days, logger);
-  const stop = startScheduler(pipeline, config.accounts, config.pollIntervalSeconds * 1000, logger);
+  const stop = startPolling(pipeline, config.accounts, config.pollIntervalSeconds * 1000, logger);
   await new Promise<void>((resolve) => {
     const shutdown = () => resolve();
     process.once("SIGINT", shutdown);

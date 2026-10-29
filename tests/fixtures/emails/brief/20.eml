@@ -1,0 +1,9 @@
+From: Sender 20 <sender20@example.edu>
+To: student@university.edu
+Subject: Very long subject line that keeps going and going to check that subject length does not break anything in the brief report layout at all
+Date: Mon, 02 Nov 2026 09:20:00 +0700
+Message-ID: <brief-20@example.edu>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Short body. Short body. Short body. Short body. Short body. Short body. Short body. Short body. 

@@ -7,7 +7,7 @@ import type { ProcessedRecord, Report } from "../../src/domain/types.js";
 import { MIGRATIONS } from "../../src/store/migrations/index.js";
 import { SqliteStore } from "../../src/store/sqlite-store.js";
 
-const key = { accountId: "school", mailbox: "INBOX", uidValidity: 7, uid: 42 };
+const key = { accountId: "school", mailbox: "INBOX", uidValidity: "7", uid: "42" };
 
 const record = (over: Partial<ProcessedRecord> = {}): ProcessedRecord => ({
   key,
@@ -20,6 +20,7 @@ const record = (over: Partial<ProcessedRecord> = {}): ProcessedRecord => ({
   outcome: "FORWARDED",
   tokensIn: 10,
   tokensOut: 5,
+  costUsd: null,
   processedAt: "2026-10-29T08:00:00.000Z",
   ...over,
 });
@@ -56,16 +57,16 @@ describe("SqliteStore", () => {
     store.setMailboxState({
       accountId: "school",
       mailbox: "INBOX",
-      uidValidity: 7,
-      lastSeenUid: 10,
+      uidValidity: "7",
+      cursor: "10",
     });
     store.setMailboxState({
       accountId: "school",
       mailbox: "INBOX",
-      uidValidity: 7,
-      lastSeenUid: 12,
+      uidValidity: "7",
+      cursor: "12",
     });
-    expect(store.getMailboxState("school", "INBOX")).toMatchObject({ lastSeenUid: 12 });
+    expect(store.getMailboxState("school", "INBOX")).toMatchObject({ cursor: "12" });
   });
 
   it("records idempotently and detects by UID and by Message-ID", () => {
@@ -73,8 +74,8 @@ describe("SqliteStore", () => {
     store.recordProcessed(record({ outcome: "SKIPPED" }));
     expect(store.isProcessed(key, null)).toBe(true);
     // Same message after a UIDVALIDITY reset: new key, same Message-ID.
-    expect(store.isProcessed({ ...key, uidValidity: 8, uid: 1 }, "<m1@x>")).toBe(true);
-    expect(store.isProcessed({ ...key, uidValidity: 8, uid: 1 }, "<other@x>")).toBe(false);
+    expect(store.isProcessed({ ...key, uidValidity: "8", uid: "1" }, "<m1@x>")).toBe(true);
+    expect(store.isProcessed({ ...key, uidValidity: "8", uid: "1" }, "<other@x>")).toBe(false);
     expect(store.isProcessed({ ...key, accountId: "work" }, "<m1@x>")).toBe(false);
   });
 
@@ -111,10 +112,10 @@ describe("SqliteStore", () => {
 
   it("purges old records only", () => {
     store.recordProcessed(record({ processedAt: "2026-01-01T00:00:00.000Z" }));
-    store.recordProcessed(record({ key: { ...key, uid: 43 }, messageId: null }));
+    store.recordProcessed(record({ key: { ...key, uid: "43" }, messageId: null }));
     const removed = store.purgeOlderThan(90, new Date("2026-10-29T08:00:00Z"));
     expect(removed).toBe(1);
-    expect(store.isProcessed({ ...key, uid: 43 }, null)).toBe(true);
+    expect(store.isProcessed({ ...key, uid: "43" }, null)).toBe(true);
   });
 
   it("keeps a stable install id", () => {
@@ -138,7 +139,7 @@ describe("migration 002 (mailbox in the message key)", () => {
       `INSERT INTO processed_messages (account_id, uid_validity, uid, message_id, sender, subject,
          decision, outcome, processed_at) VALUES ('school', 7, 1, '<a@x>', 's', 'old', 'LLM', 'SKIPPED', '2026-10-01')`,
     ).run();
-    const oldKey = { accountId: "school", uidValidity: 7, uid: 2 };
+    const oldKey = { accountId: "school", uidValidity: "7", uid: "2" };
     v1.prepare("INSERT INTO pending_reports VALUES ('school', 7, 2, ?, ?, '2026-10-01')").run(
       JSON.stringify({ key: oldKey }),
       JSON.stringify({ key: oldKey }),
@@ -150,10 +151,13 @@ describe("migration 002 (mailbox in the message key)", () => {
 
     const store = new SqliteStore(path);
     expect(
-      store.isProcessed({ accountId: "school", mailbox: "INBOX", uidValidity: 7, uid: 1 }, null),
+      store.isProcessed(
+        { accountId: "school", mailbox: "INBOX", uidValidity: "7", uid: "1" },
+        null,
+      ),
     ).toBe(true);
     expect(
-      store.isProcessed({ accountId: "school", mailbox: "Work", uidValidity: 7, uid: 1 }, null),
+      store.isProcessed({ accountId: "school", mailbox: "Work", uidValidity: "7", uid: "1" }, null),
     ).toBe(false);
     const [pending] = store.listPendingReports();
     expect(pending!.report.key).toEqual({ ...oldKey, mailbox: "INBOX" });

@@ -51,17 +51,20 @@ describe("separate model per role (FR-015)", () => {
   it("sends Gatekeeper calls to the gatekeeper model and Analyst calls to the analyst model", async () => {
     const { ai } = testConfig();
     const models = new Map<string, MockLanguageModelV4>();
-    const client = new AiSdkLlmClient(ai, 2, (cfg) => {
-      const m = mockModel(cfg, cfg === ai.gatekeeper ? important() : analysis());
-      models.set(cfg.model, m);
-      return m;
+    const client = new AiSdkLlmClient(ai, {
+      concurrency: 2,
+      modelFactory: (cfg) => {
+        const m = mockModel(cfg, cfg === ai.gatekeeper ? important() : analysis());
+        models.set(cfg.model, m);
+        return m;
+      },
     });
     const gatekeeper = models.get("small-model")!;
     const analyst = models.get("strong-model")!;
 
     const verdict = await classify(client, email, { threshold: 0.7, retry: fast });
     expect(verdict).toMatchObject({ effective: "IMPORTANT", failed: false });
-    expect(verdict.usage).toEqual({ input: 50, output: 10 });
+    expect(verdict.usage).toMatchObject({ input: 50, output: 10, model: "small-model" });
     expect(gatekeeper.doGenerateCalls).toHaveLength(1);
     expect(analyst.doGenerateCalls).toHaveLength(0);
     expect(gatekeeper.doGenerateCalls[0]!.temperature).toBe(0);
@@ -74,9 +77,10 @@ describe("separate model per role (FR-015)", () => {
 
   it("fails open when the model returns output that breaks the schema", async () => {
     const { ai } = testConfig();
-    const client = new AiSdkLlmClient(ai, 1, (cfg) =>
-      mockModel(cfg, { category: "URGENT", confidence_score: 2 }),
-    );
+    const client = new AiSdkLlmClient(ai, {
+      concurrency: 1,
+      modelFactory: (cfg) => mockModel(cfg, { category: "URGENT", confidence_score: 2 }),
+    });
     const verdict = await classify(client, email, { threshold: 0.7, retry: fast });
     expect(verdict).toMatchObject({ effective: "IMPORTANT", failed: true });
   });

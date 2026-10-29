@@ -1,12 +1,18 @@
 import { convert } from "html-to-text";
+import { DateTime } from "luxon";
 import { simpleParser, type AddressObject } from "mailparser";
 import type { Address } from "../domain/types.js";
 
 export interface CleanedEmail {
   messageId: string | null;
   from: Address;
+  to: Address[];
+  cc: Address[];
   subject: string;
   receivedAt: Date;
+  /** ISO time with the sender's UTC offset when the Date header has one. */
+  sentAt: string;
+  calendarParts: string[];
   text: string;
   truncated: boolean;
   attachments: string[];
@@ -68,6 +74,46 @@ function firstAddress(from: AddressObject | AddressObject[] | undefined): Addres
   return first?.name ? { name: first.name, address } : { address };
 }
 
+/** Names come from the sender: strip control characters and keep them short (FR-128). */
+export function sanitizeName(name: string): string {
+  return (
+    name
+      // eslint-disable-next-line no-control-regex -- removing control characters is the point
+      .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 64)
+  );
+}
+
+function addressList(field: AddressObject | AddressObject[] | undefined): Address[] {
+  const objs = Array.isArray(field) ? field : field ? [field] : [];
+  const out: Address[] = [];
+  const walk = (entries: AddressObject["value"]) => {
+    for (const e of entries) {
+      // Group syntax ("Team: a@x, b@y;") nests addresses.
+      if (e.group) walk(e.group);
+      else if (e.address) {
+        const name = e.name ? sanitizeName(e.name) : "";
+        out.push(
+          name ? { name, address: e.address.toLowerCase() } : { address: e.address.toLowerCase() },
+        );
+      }
+    }
+  };
+  for (const o of objs) walk(o.value);
+  return out;
+}
+
+/** Keeps the sender's offset from the raw Date header, falling back to UTC. */
+function sentAtFrom(rawDate: string | undefined, date: Date): string {
+  const parsed = rawDate ? DateTime.fromRFC2822(rawDate.trim(), { setZone: true }) : null;
+  return parsed?.isValid ? parsed.toISO()! : date.toISOString();
+}
+
+const MAX_CALENDAR_PARTS = 3;
+const MAX_CALENDAR_BYTES = 64 * 1024;
+
 function headerString(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (Array.isArray(value) && typeof value[0] === "string") return value[0];
@@ -84,15 +130,30 @@ export async function parseAndClean(
   const rawText = parsed.html ? htmlToPlain(parsed.html) : (parsed.text ?? "");
   const body = normalizeWhitespace(stripQuotedReplies(rawText));
   const { text, truncated } = truncate(body, opts.maxBodyChars);
+  const receivedAt = parsed.date ?? opts.fallbackDate;
+  const rawDate = parsed.headerLines.find((h) => h.key === "date")?.line.replace(/^date:\s*/i, "");
+  const calendar = parsed.attachments.filter(
+    (a) => a.contentType === "text/calendar" || a.filename?.toLowerCase().endsWith(".ics"),
+  );
 
   return {
     messageId: parsed.messageId ?? null,
     from: firstAddress(parsed.from),
+    to: addressList(parsed.to),
+    cc: addressList(parsed.cc),
     subject: parsed.subject?.trim() || "(no subject)",
-    receivedAt: parsed.date ?? opts.fallbackDate,
+    receivedAt,
+    sentAt: sentAtFrom(rawDate, receivedAt),
+    calendarParts: calendar
+      .filter((a) => a.size <= MAX_CALENDAR_BYTES)
+      .slice(0, MAX_CALENDAR_PARTS)
+      .map((a) => a.content.toString("utf8")),
     text,
     truncated,
-    attachments: parsed.attachments.map((a) => a.filename ?? "(unnamed attachment)"),
+    // Invitations are shown as an Event section, not as attachments.
+    attachments: parsed.attachments
+      .filter((a) => !calendar.includes(a) || a.filename)
+      .map((a) => a.filename ?? "(unnamed attachment)"),
     selfSentMarker: headerString(parsed.headers.get("x-mail-me")),
   };
 }

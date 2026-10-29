@@ -16,6 +16,7 @@ import { AiSdkLlmClient } from "../src/agents/llm.js";
 import { loadConfig } from "../src/config/load.js";
 import type { Category } from "../src/domain/types.js";
 import { parseAndClean } from "../src/fetcher/clean.js";
+import { toIncomingEmail } from "../src/fetcher/incoming.js";
 import { evaluateRules } from "../src/rules/engine.js";
 
 export const LABELS = ["important", "promotion", "spam"] as const;
@@ -64,7 +65,7 @@ async function main(argv: string[]): Promise<number> {
   }
   dotenv.config({ quiet: true });
   const config = loadConfig((i >= 0 ? argv[i + 1] : undefined) ?? "config.json");
-  const llm = new AiSdkLlmClient(config.ai, config.limits.llm_concurrency);
+  const llm = new AiSdkLlmClient(config.ai, { concurrency: config.limits.llm_concurrency });
 
   const samples: Sample[] = [];
   for (const label of LABELS) {
@@ -79,7 +80,11 @@ async function main(argv: string[]): Promise<number> {
         maxBodyChars: config.limits.max_body_chars,
         fallbackDate: new Date(),
       });
-      const email = { accountId: "eval", mailbox: "INBOX", uidValidity: 0, uid: 0, ...cleaned };
+      const email = toIncomingEmail(
+        { accountId: "eval", mailbox: "INBOX", uidValidity: "0", uid: "0" },
+        cleaned,
+        { email: "eval@localhost", webLink: null },
+      );
       const decision = evaluateRules(email, {
         installId: "eval",
         isProcessed: () => false,

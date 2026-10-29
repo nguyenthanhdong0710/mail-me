@@ -1,16 +1,18 @@
 import { analyze } from "../agents/analyst.js";
 import { classify, type GatekeeperVerdict } from "../agents/gatekeeper.js";
+import { detectEvents, type SchedulerOutcome } from "../agents/scheduler.js";
 import type { AccountConfig, AppConfig } from "../config/load.js";
 import { dispatch } from "../courier/dispatcher.js";
 import { buildReport } from "../courier/report.js";
-import type {
-  Clock,
-  LlmClient,
-  MailSource,
-  MailSourceFactory,
-  RawMessage,
-  ReportChannel,
-  Store,
+import {
+  GrantRevokedError,
+  type Clock,
+  type LlmClient,
+  type MailSource,
+  type MailSourceFactory,
+  type RawMessage,
+  type ReportChannel,
+  type Store,
 } from "../domain/ports.js";
 import type {
   AnalysisResult,
@@ -20,6 +22,7 @@ import type {
   LlmUsage,
 } from "../domain/types.js";
 import { parseAndClean } from "../fetcher/clean.js";
+import { toIncomingEmail } from "../fetcher/incoming.js";
 import type { Logger } from "../lib/logger.js";
 import type { RetryOptions } from "../lib/retry.js";
 import { evaluateRules } from "../rules/engine.js";
@@ -57,10 +60,19 @@ export class Pipeline {
       try {
         await this.pollMailbox(account, mailbox, source);
       } catch (err) {
-        this.deps.logger.error(
-          { account: account.id, mailbox, err: (err as Error).message },
-          "mailbox poll failed",
-        );
+        if (err instanceof GrantRevokedError) {
+          // The cursor is untouched, so mail that arrives meanwhile is reported after the
+          // user signs in again (FR-104). Other accounts keep polling.
+          this.deps.logger.error(
+            { account: account.id, mailbox, fix: err.fixCommand },
+            `sign-in revoked or expired, run ${err.fixCommand}`,
+          );
+        } else {
+          this.deps.logger.error(
+            { account: account.id, mailbox, err: (err as Error).message },
+            "mailbox poll failed",
+          );
+        }
         failure ??= err;
       } finally {
         await source.close().catch(() => {});
@@ -81,65 +93,65 @@ export class Pipeline {
     source: MailSource,
   ): Promise<void> {
     const { store, logger, config } = this.deps;
-    const { uidValidity, uidNext } = await source.open(mailbox);
+    const { generation, head } = await source.open(mailbox);
     let state = store.getMailboxState(account.id, mailbox);
 
-    if (!state || state.uidValidity !== uidValidity) {
-      // First run, or the server reset UIDs: start from "now" (or the look-back window)
+    if (!state || state.uidValidity !== generation) {
+      // First run, or the server reset its IDs: start from "now" (or the look-back window)
       // instead of replaying the whole mailbox (FR-019, research R2).
-      let baseline = uidNext - 1;
+      let baseline = head;
       if (!state && account.lookbackHours > 0) {
         const since = new Date(this.deps.clock.now().getTime() - account.lookbackHours * 3_600_000);
-        const first = await source.firstUidSince(since);
-        if (first !== null) baseline = first - 1;
+        baseline = (await source.cursorSince(since)) ?? head;
       }
       if (state) {
         logger.warn(
-          { account: account.id, mailbox, old: state.uidValidity, new: uidValidity },
-          "UIDVALIDITY changed, re-baselining",
+          { account: account.id, mailbox, old: state.uidValidity, new: generation },
+          "mailbox generation changed, re-baselining",
         );
       }
-      state = { accountId: account.id, mailbox, uidValidity, lastSeenUid: baseline };
+      state = { accountId: account.id, mailbox, uidValidity: generation, cursor: baseline };
       store.setMailboxState(state);
     }
 
-    let lastSeen = state.lastSeenUid;
+    let cursor = state.cursor;
     let contiguous = true;
-    for await (const raw of source.fetchSince(state.lastSeenUid, config.limits.fetch_batch)) {
+    for await (const raw of source.fetchSince(state.cursor, config.limits.fetch_batch)) {
       let result: MessageResult;
       try {
-        result = await this.processMessage(account, mailbox, uidValidity, raw);
+        result = await this.processMessage(account, mailbox, generation, raw);
       } catch (err) {
         logger.error(
-          { account: account.id, mailbox, uid: raw.uid, err },
+          { account: account.id, mailbox, uid: raw.id, err },
           "message processing failed, will retry",
         );
         result = { settled: false };
       }
-      // Only advance over a contiguous prefix of settled UIDs, so failures are retried.
+      // Only advance over a contiguous prefix of settled messages, so failures are retried.
       if (!result.settled) contiguous = false;
-      if (contiguous) lastSeen = raw.uid;
+      if (contiguous) cursor = raw.cursor;
     }
-    if (lastSeen !== state.lastSeenUid) store.setMailboxState({ ...state, lastSeenUid: lastSeen });
+    if (contiguous) cursor = source.settledCursor?.() ?? cursor;
+    if (cursor !== state.cursor) store.setMailboxState({ ...state, cursor });
   }
 
   async processMessage(
     account: AccountConfig,
     mailbox: string,
-    uidValidity: number,
+    uidValidity: string,
     raw: RawMessage,
   ): Promise<MessageResult> {
     const { store, llm, logger, config, clock } = this.deps;
     const started = Date.now();
-    const key = { accountId: account.id, mailbox, uidValidity, uid: raw.uid };
+    const key = { accountId: account.id, mailbox, uidValidity, uid: raw.id };
     if (store.hasPendingReport(key)) return { settled: true };
 
     const cleaned = await parseAndClean(raw.source, {
       maxBodyChars: config.limits.max_body_chars,
       fallbackDate: raw.internalDate,
     });
-    const email: IncomingEmail = { ...key, ...cleaned };
-    const log = logger.child({ account: account.id, mailbox, uid: raw.uid });
+    const email: IncomingEmail = toIncomingEmail(key, cleaned, account, raw);
+    const log = logger.child({ account: account.id, mailbox, uid: raw.id });
 
     const decision = evaluateRules(email, {
       installId: this.installId,
@@ -161,12 +173,18 @@ export class Pipeline {
       confidence: null,
       tokensIn: null,
       tokensOut: null,
+      costUsd: 0,
     };
-    const usage: LlmUsage = { input: 0, output: 0 };
+    const usage = { input: 0, output: 0 };
+    // Sum of the email's AI calls; null once any call had no known price (SC-108).
+    let costUsd: number | null = 0;
+    let aiCalls = 0;
     const addUsage = (u: LlmUsage | null) => {
       if (!u) return;
+      aiCalls++;
       usage.input += u.input;
       usage.output += u.output;
+      costUsd = costUsd === null || u.costUsd === null ? null : roundUsd(costUsd + u.costUsd);
     };
 
     if (decision.kind === "SELF_SENT") {
@@ -176,7 +194,10 @@ export class Pipeline {
         outcome: "SKIPPED",
         processedAt: clock.now().toISOString(),
       });
-      log.info({ decision: "SELF_SENT", outcome: "SKIPPED" }, "skipped our own report");
+      log.info(
+        { decision: "SELF_SENT", outcome: "SKIPPED", aiCalls: 0, costUsd: 0 },
+        "skipped our own report",
+      );
       return { settled: true };
     }
 
@@ -194,6 +215,8 @@ export class Pipeline {
           keyword: decision.keyword,
           category: "PROMOTION",
           outcome: "SKIPPED",
+          aiCalls: 0,
+          costUsd: 0,
           ms: Date.now() - started,
         },
         "email skipped",
@@ -209,6 +232,7 @@ export class Pipeline {
       verdict = await classify(llm, email, {
         threshold: config.rules.confidence_threshold,
         retry: this.deps.retry,
+        log,
       });
       addUsage(verdict.usage);
       draft.category = verdict.effective;
@@ -219,6 +243,7 @@ export class Pipeline {
           ...draft,
           tokensIn: usage.input,
           tokensOut: usage.output,
+          costUsd,
           outcome: "SKIPPED",
           processedAt: clock.now().toISOString(),
         });
@@ -230,6 +255,8 @@ export class Pipeline {
             reasoning: verdict.result?.reasoning,
             outcome: "SKIPPED",
             tokens: usage,
+            aiCalls,
+            costUsd,
             ms: Date.now() - started,
           },
           "email skipped",
@@ -242,7 +269,9 @@ export class Pipeline {
     try {
       const res = await analyze(llm, email, {
         targetLanguage: config.ai.targetLanguage,
+        style: config.ai.analystStyle,
         retry: this.deps.retry,
+        log,
       });
       analysis = res.value;
       addUsage(res.usage);
@@ -250,13 +279,33 @@ export class Pipeline {
       log.error({ err: (err as Error).message }, "analysis failed, sending fallback report");
     }
 
-    const report = buildReport(
-      email,
-      { accountId: account.id, label: account.label },
-      analysis,
-      config.limits.excerpt_chars,
-    );
-    const finalDraft = { ...draft, tokensIn: usage.input, tokensOut: usage.output };
+    // Event detection never blocks or downgrades the report (FR-119, SC-109).
+    let scheduled: SchedulerOutcome = { events: [], eventsOmitted: 0, usage: null };
+    let schedulerFailed = false;
+    try {
+      scheduled = await detectEvents(llm, email, {
+        enabled: config.ai.scheduler !== null,
+        timezone: config.timezone,
+        outlookHost: config.calendar.outlookHost,
+        now: clock.now(),
+        retry: this.deps.retry,
+        log,
+      });
+      addUsage(scheduled.usage);
+    } catch (err) {
+      schedulerFailed = true;
+      log.error({ err: (err as Error).message }, "scheduler failed");
+    }
+
+    const report = buildReport(email, { accountId: account.id, label: account.label }, analysis, {
+      excerptChars: config.limits.excerpt_chars,
+      style: config.ai.analystStyle,
+      timezone: config.timezone,
+      events: scheduled.events,
+      eventsOmitted: scheduled.eventsOmitted,
+      schedulerFailed,
+    });
+    const finalDraft = { ...draft, tokensIn: usage.input, tokensOut: usage.output, costUsd };
     store.savePendingReport(report, finalDraft, [...this.deps.channels.keys()]);
 
     const [pending] = store
@@ -265,7 +314,7 @@ export class Pipeline {
         (p) =>
           p.report.key.mailbox === mailbox &&
           p.report.key.uidValidity === uidValidity &&
-          p.report.key.uid === raw.uid,
+          p.report.key.uid === raw.id,
       );
     const result = pending
       ? await dispatch(pending, this.dispatchDeps())
@@ -280,8 +329,12 @@ export class Pipeline {
         gatekeeperFailed: verdict?.failed,
         lowConfidence: verdict?.lowConfidence,
         analysisFailed: analysis === null,
+        events: scheduled.events.length,
+        schedulerFailed,
         outcome: result.done ? result.outcome : "DELIVERY_PENDING",
         tokens: usage,
+        aiCalls,
+        costUsd,
         ms: Date.now() - started,
       },
       "email reported",
@@ -299,4 +352,8 @@ export class Pipeline {
       retry: this.deps.retry,
     };
   }
+}
+
+function roundUsd(value: number): number {
+  return Math.round(value * 1e6) / 1e6;
 }

@@ -138,4 +138,91 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       ALTER TABLE deliveries_v2 RENAME TO deliveries;
     `,
   },
+  {
+    // Feature 002: mail sources other than IMAP (Gmail API, Graph) have string IDs and opaque
+    // cursors, so message keys become TEXT and mailbox_state stores a cursor (002 research R2).
+    // Existing IMAP values are kept as their decimal text, so nothing is replayed or skipped.
+    version: 3,
+    sql: `
+      CREATE TABLE mailbox_state_v3 (
+        account_id   TEXT NOT NULL,
+        mailbox      TEXT NOT NULL,
+        uid_validity TEXT NOT NULL,
+        cursor       TEXT NOT NULL,
+        updated_at   TEXT NOT NULL,
+        PRIMARY KEY (account_id, mailbox)
+      );
+      INSERT INTO mailbox_state_v3
+        SELECT account_id, mailbox, CAST(uid_validity AS TEXT), CAST(last_seen_uid AS TEXT), updated_at
+        FROM mailbox_state;
+      DROP TABLE mailbox_state;
+      ALTER TABLE mailbox_state_v3 RENAME TO mailbox_state;
+
+      CREATE TABLE processed_messages_v3 (
+        account_id   TEXT NOT NULL,
+        mailbox      TEXT NOT NULL,
+        uid_validity TEXT NOT NULL,
+        uid          TEXT NOT NULL,
+        message_id   TEXT,
+        sender       TEXT NOT NULL,
+        subject      TEXT NOT NULL,
+        decision     TEXT NOT NULL,
+        category     TEXT,
+        confidence   REAL,
+        outcome      TEXT NOT NULL,
+        tokens_in    INTEGER,
+        tokens_out   INTEGER,
+        cost_usd     REAL,
+        processed_at TEXT NOT NULL,
+        PRIMARY KEY (account_id, mailbox, uid_validity, uid)
+      );
+      INSERT INTO processed_messages_v3
+        SELECT account_id, mailbox, CAST(uid_validity AS TEXT), CAST(uid AS TEXT), message_id, sender,
+               subject, decision, category, confidence, outcome, tokens_in, tokens_out, NULL, processed_at
+        FROM processed_messages;
+      DROP TABLE processed_messages;
+      ALTER TABLE processed_messages_v3 RENAME TO processed_messages;
+      CREATE INDEX processed_messages_message_id ON processed_messages (account_id, message_id);
+      CREATE INDEX processed_messages_processed_at ON processed_messages (processed_at);
+
+      CREATE TABLE pending_reports_v3 (
+        account_id   TEXT NOT NULL,
+        mailbox      TEXT NOT NULL,
+        uid_validity TEXT NOT NULL,
+        uid          TEXT NOT NULL,
+        report_json  TEXT NOT NULL,
+        draft_json   TEXT NOT NULL,
+        created_at   TEXT NOT NULL,
+        PRIMARY KEY (account_id, mailbox, uid_validity, uid)
+      );
+      INSERT INTO pending_reports_v3
+        SELECT account_id, mailbox, CAST(uid_validity AS TEXT), CAST(uid AS TEXT), report_json,
+               draft_json, created_at
+        FROM pending_reports;
+      DROP TABLE pending_reports;
+      ALTER TABLE pending_reports_v3 RENAME TO pending_reports;
+
+      CREATE TABLE deliveries_v3 (
+        account_id      TEXT NOT NULL,
+        mailbox         TEXT NOT NULL,
+        uid_validity    TEXT NOT NULL,
+        uid             TEXT NOT NULL,
+        channel         TEXT NOT NULL,
+        status          TEXT NOT NULL,
+        attempts        INTEGER NOT NULL DEFAULT 0,
+        parts_sent      INTEGER NOT NULL DEFAULT 0,
+        external_id     TEXT,
+        last_error      TEXT,
+        next_attempt_at TEXT,
+        updated_at      TEXT NOT NULL,
+        PRIMARY KEY (account_id, mailbox, uid_validity, uid, channel)
+      );
+      INSERT INTO deliveries_v3
+        SELECT account_id, mailbox, CAST(uid_validity AS TEXT), CAST(uid AS TEXT), channel, status,
+               attempts, parts_sent, external_id, last_error, next_attempt_at, updated_at
+        FROM deliveries;
+      DROP TABLE deliveries;
+      ALTER TABLE deliveries_v3 RENAME TO deliveries;
+    `,
+  },
 ];

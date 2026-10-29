@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AppConfig } from "../../src/config/load.js";
-import { selfSentMarker } from "../../src/courier/channels/email/smtp-channel.js";
+import { selfSentMarker } from "../../src/courier/channels/email/email-channel.js";
 import { createLogger } from "../../src/lib/logger.js";
 import { Pipeline } from "../../src/orchestrator/pipeline.js";
-import { runOnce } from "../../src/orchestrator/scheduler.js";
+import { runOnce } from "../../src/orchestrator/poller.js";
 import { SqliteStore } from "../../src/store/sqlite-store.js";
 import { testConfig } from "../fakes/config.js";
 import { FakeChannel, FakeClock, FakeLlm, FakeMailServer, promotion } from "../fakes/index.js";
@@ -32,7 +32,7 @@ describe("pipeline (US1)", () => {
       retry: fast,
     });
   const poll = (p = pipeline()) => runOnce(p, config.accounts, logger);
-  const key = (uid: number) => ({ accountId: "school", mailbox: "INBOX", uidValidity: 1, uid });
+  const key = (uid: string) => ({ accountId: "school", mailbox: "INBOX", uidValidity: "1", uid });
 
   beforeEach(async () => {
     server = new FakeMailServer();

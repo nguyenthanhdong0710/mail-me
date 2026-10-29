@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { selfSentMarker } from "../../src/courier/channels/email/smtp-channel.js";
+import { selfSentMarker } from "../../src/courier/channels/email/email-channel.js";
 import type { IncomingEmail } from "../../src/domain/types.js";
 import { parseAndClean } from "../../src/fetcher/clean.js";
+import { toIncomingEmail } from "../../src/fetcher/incoming.js";
 import { evaluateRules } from "../../src/rules/engine.js";
 import { eml } from "../fixtures/load.js";
 
@@ -13,13 +14,11 @@ async function decide(headers: Record<string, string>, subject = "[AI Summary] S
     Buffer.from(eml({ from: "Mail-Me <me@university.edu>", subject, headers })),
     { maxBodyChars: 12_000, fallbackDate: new Date() },
   );
-  const email: IncomingEmail = {
-    accountId: "a",
-    uidValidity: 1,
-    uid: 1,
-    mailbox: "INBOX",
-    ...cleaned,
-  };
+  const email: IncomingEmail = toIncomingEmail(
+    { accountId: "a", uidValidity: "1", uid: "1", mailbox: "INBOX" },
+    cleaned,
+    { email: "student@university.edu", webLink: null },
+  );
   return evaluateRules(email, {
     installId: OURS,
     isProcessed: () => false,

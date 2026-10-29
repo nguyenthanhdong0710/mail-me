@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { renderEmail } from "../../src/courier/channels/email/render.js";
-import { classifySmtpError, reportHeaders } from "../../src/courier/channels/email/smtp-channel.js";
+import { reportHeaders } from "../../src/courier/channels/email/email-channel.js";
+import { classifySmtpError } from "../../src/courier/channels/email/senders.js";
 import type { Report } from "../../src/domain/types.js";
 import { analysis } from "../fakes/index.js";
 
 const base: Report = {
-  key: { accountId: "school", mailbox: "INBOX", uidValidity: 1, uid: 5 },
+  key: { accountId: "school", mailbox: "INBOX", uidValidity: "1", uid: "5" },
   source: { accountId: "school", label: "School" },
   original: {
     messageId: "<orig@university.edu>",

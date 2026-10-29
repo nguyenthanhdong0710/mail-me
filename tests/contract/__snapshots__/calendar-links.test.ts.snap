@@ -1,0 +1,28 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`.ics file (RFC 5545) > writes a PUBLISH calendar with a stable UID 1`] = `
+"BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Mail-Me//EN
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:71bf3f2c70691ff45f8a134a4ef77415@mail-me
+DTSTAMP:20261102T000000Z
+DTSTART:20261106T070000Z
+DTEND:20261106T074500Z
+SUMMARY:Project sync & review #3
+DESCRIPTION:From: Prof — Sync
+URL:https://teams.microsoft.com/l/meetup-join/1
+END:VEVENT
+BEGIN:VEVENT
+UID:c17cdfb8c53edeff78986fd24e186ac2@mail-me
+DTSTAMP:20261102T000000Z
+DTSTART;VALUE=DATE:20261110
+DTEND;VALUE=DATE:20261112
+SUMMARY:Project sync & review #3
+DESCRIPTION:From: Prof — Sync
+LOCATION:Đà Lạt
+END:VEVENT
+END:VCALENDAR
+"
+`;

@@ -6,9 +6,9 @@ import {
   MAX_BACKOFF_MS,
   nextDelay,
   startRetentionJob,
-  startScheduler,
+  startPolling,
   type Timers,
-} from "../../src/orchestrator/scheduler.js";
+} from "../../src/orchestrator/poller.js";
 import { SqliteStore } from "../../src/store/sqlite-store.js";
 
 const logger = createLogger({ level: "silent" });
@@ -46,7 +46,7 @@ describe("nextDelay", () => {
   });
 });
 
-describe("startScheduler", () => {
+describe("startPolling", () => {
   it("runs one loop per account and backs off only the failing one", async () => {
     const polls: string[] = [];
     const pipeline = {
@@ -56,7 +56,7 @@ describe("startScheduler", () => {
       },
     } as unknown as Pipeline;
     const timers = new ManualTimers();
-    const stop = startScheduler(pipeline, [account("ok"), account("broken")], 1000, logger, timers);
+    const stop = startPolling(pipeline, [account("ok"), account("broken")], 1000, logger, timers);
     await settle();
     expect(polls.sort()).toEqual(["broken", "ok"]);
     expect(timers.delays().sort((a, b) => a - b)).toEqual([1000, 2000]);
@@ -80,7 +80,7 @@ describe("startScheduler", () => {
       },
     } as unknown as Pipeline;
     const timers = new ManualTimers();
-    const stop = startScheduler(pipeline, [account("a")], 1000, logger, timers);
+    const stop = startPolling(pipeline, [account("a")], 1000, logger, timers);
     await settle();
     expect(timers.pending.size).toBe(0); // next run is only scheduled after this one ends
     release();
@@ -98,7 +98,7 @@ describe("startRetentionJob", () => {
     const store = new SqliteStore(":memory:");
     const now = new Date("2026-10-29T00:00:00Z");
     store.recordProcessed({
-      key: { accountId: "a", mailbox: "INBOX", uidValidity: 1, uid: 1 },
+      key: { accountId: "a", mailbox: "INBOX", uidValidity: "1", uid: "1" },
       messageId: null,
       sender: "x@y",
       subject: "old",
@@ -108,13 +108,14 @@ describe("startRetentionJob", () => {
       outcome: "SKIPPED",
       tokensIn: 1,
       tokensOut: 1,
+      costUsd: null,
       processedAt: "2026-01-01T00:00:00Z",
     });
     const timers = new ManualTimers();
     const stop = startRetentionJob(store, 90, logger, () => now, timers);
     await settle();
     expect(
-      store.getProcessed({ accountId: "a", mailbox: "INBOX", uidValidity: 1, uid: 1 }),
+      store.getProcessed({ accountId: "a", mailbox: "INBOX", uidValidity: "1", uid: "1" }),
     ).toBeNull();
     expect(timers.delays()).toEqual([86_400_000]);
     await stop();

@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AppConfig } from "../../src/config/load.js";
 import { renderEmail } from "../../src/courier/channels/email/render.js";
-import { reportHeaders } from "../../src/courier/channels/email/smtp-channel.js";
+import { reportHeaders } from "../../src/courier/channels/email/email-channel.js";
 import { renderTelegram } from "../../src/courier/channels/telegram/render.js";
 import { createLogger } from "../../src/lib/logger.js";
 import { Pipeline } from "../../src/orchestrator/pipeline.js";
-import { runOnce } from "../../src/orchestrator/scheduler.js";
+import { runOnce } from "../../src/orchestrator/poller.js";
 import { SqliteStore } from "../../src/store/sqlite-store.js";
 import { testConfig } from "../fakes/config.js";
 import { FakeChannel, FakeClock, FakeLlm, FakeMailServer } from "../fakes/index.js";
@@ -117,8 +117,8 @@ describe("multiple accounts, both channels (US3)", () => {
     server.deliver("work", eml({ subject: "b" }), { mailbox: "Projects" });
     server.deliver("work", eml({ subject: "c" }), { mailbox: "Projects" });
     await poll();
-    expect(store.getMailboxState("work", "INBOX")?.lastSeenUid).toBe(1);
-    expect(store.getMailboxState("work", "Projects")?.lastSeenUid).toBe(2);
-    expect(store.getMailboxState("school", "INBOX")?.lastSeenUid).toBe(0);
+    expect(store.getMailboxState("work", "INBOX")?.cursor).toBe("1");
+    expect(store.getMailboxState("work", "Projects")?.cursor).toBe("2");
+    expect(store.getMailboxState("school", "INBOX")?.cursor).toBe("0");
   });
 });

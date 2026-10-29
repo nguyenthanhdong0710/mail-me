@@ -12,17 +12,25 @@ const REDACT_PATHS = [
   "*.apiKey",
   "*.botToken",
   "*.*.password",
+  "refreshToken",
+  "accessToken",
+  "clientSecret",
+  "*.refreshToken",
+  "*.accessToken",
+  "*.clientSecret",
 ];
 
 /**
  * Structured JSON logger. Besides path-based redaction, every known secret value is
  * scrubbed from the final output, so a secret inside an error message never leaks.
+ * `secrets` may be a Set that grows later (OAuth tokens obtained at runtime); it is read on
+ * every write.
  */
 export function createLogger(
-  opts: { level?: string; secrets?: string[] } = {},
+  opts: { level?: string; secrets?: Iterable<string> } = {},
   destination?: DestinationStream,
 ): Logger {
-  const secrets = (opts.secrets ?? []).filter((s) => s.length >= 4);
+  const secrets = opts.secrets ?? [];
   return pino(
     {
       level: opts.level ?? "info",
@@ -30,7 +38,9 @@ export function createLogger(
       hooks: {
         streamWrite(s) {
           let out = s;
-          for (const secret of secrets) out = out.split(secret).join("[REDACTED]");
+          for (const secret of secrets) {
+            if (secret.length >= 4) out = out.split(secret).join("[REDACTED]");
+          }
           return out;
         },
       },

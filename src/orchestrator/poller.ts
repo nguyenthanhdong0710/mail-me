@@ -66,7 +66,7 @@ function loop(run: () => Promise<number>, timers: Timers): () => Promise<void> {
  * One independent polling loop per account. A failing account backs off exponentially
  * without delaying the others (FR-017).
  */
-export function startScheduler(
+export function startPolling(
   pipeline: Pipeline,
   accounts: AccountConfig[],
   intervalMs: number,

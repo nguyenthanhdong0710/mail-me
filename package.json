@@ -23,7 +23,9 @@
     "typecheck": "tsc --noEmit",
     "start:prod": "node dist/index.js start",
     "test:e2e": "E2E=1 vitest run tests/e2e",
-    "eval:gatekeeper": "tsx scripts/eval-gatekeeper.ts"
+    "eval:gatekeeper": "tsx scripts/eval-gatekeeper.ts",
+    "auth": "tsx src/index.ts auth",
+    "eval:scheduler": "tsx scripts/eval-scheduler.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.91",
@@ -33,7 +35,9 @@
     "better-sqlite3": "13.0.3",
     "dotenv": "18.0.9",
     "html-to-text": "10.0.1",
+    "ical.js": "2.2.1",
     "imapflow": "2.9.1",
+    "luxon": "3.7.2",
     "mailparser": "3.12.4",
     "nodemailer": "10.3.0",
     "pino": "10.4.0",
@@ -43,6 +47,7 @@
     "@eslint/js": "10.0.1",
     "@types/better-sqlite3": "9.6.0",
     "@types/html-to-text": "9.0.4",
+    "@types/luxon": "3.7.6",
     "@types/mailparser": "3.9.0",
     "@types/node": "24.19.2",
     "@types/nodemailer": "8.0.2",

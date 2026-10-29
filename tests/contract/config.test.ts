@@ -65,9 +65,9 @@ describe("config schema", () => {
     );
   });
 
-  it("requires recipient and smtp when email is enabled", () => {
+  it("requires a sending account when email is enabled", () => {
     const msg = errorOf((c) => delete c.delivery.email.smtp);
-    expect(msg).toContain("delivery.email.smtp — required when enabled");
+    expect(msg).toContain('delivery.email — set exactly one sending account: "oauth"');
   });
 
   it("rejects duplicate account ids", () => {

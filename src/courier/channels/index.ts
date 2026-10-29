@@ -1,18 +1,27 @@
-import type { AppConfig } from "../../config/load.js";
+import type { AppConfig, EmailChannelConfig } from "../../config/load.js";
 import type { ReportChannel } from "../../domain/ports.js";
 import type { ChannelName } from "../../domain/types.js";
 import type { Logger } from "../../lib/logger.js";
-import { EmailChannel } from "./email/smtp-channel.js";
+import type { MailSender } from "../../domain/ports.js";
+import { EmailChannel } from "./email/email-channel.js";
+import { SmtpSender } from "./email/senders.js";
 import { TelegramChannel } from "./telegram/telegram-channel.js";
 
 /** One channel per enabled `delivery.*` block (FR-020). */
 export function buildChannels(
   config: AppConfig,
   installId: string,
+  /** Builds the send-only OAuth sender (Gmail API or Graph) for `delivery.email.oauth`. */
+  oauthSender?: (oauth: NonNullable<EmailChannelConfig["oauth"]>) => MailSender,
 ): Map<ChannelName, ReportChannel> {
   const channels = new Map<ChannelName, ReportChannel>();
-  if (config.delivery.email) {
-    channels.set("email", new EmailChannel(config.delivery.email, installId));
+  const email = config.delivery.email;
+  if (email) {
+    let sender: MailSender;
+    if (email.smtp) sender = new SmtpSender(email.smtp);
+    else if (email.oauth && oauthSender) sender = oauthSender(email.oauth);
+    else throw new Error("delivery.email has no usable sending account");
+    channels.set("email", new EmailChannel(email, installId, sender));
   }
   if (config.delivery.telegram) {
     channels.set("telegram", new TelegramChannel(config.delivery.telegram));

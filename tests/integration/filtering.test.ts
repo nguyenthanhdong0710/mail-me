@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { AppConfig } from "../../src/config/load.js";
 import { createLogger } from "../../src/lib/logger.js";
 import { Pipeline } from "../../src/orchestrator/pipeline.js";
-import { runOnce } from "../../src/orchestrator/scheduler.js";
+import { runOnce } from "../../src/orchestrator/poller.js";
 import { SqliteStore } from "../../src/store/sqlite-store.js";
 import { testConfig } from "../fakes/config.js";
 import { FakeChannel, FakeClock, FakeLlm, FakeMailServer } from "../fakes/index.js";
@@ -44,7 +44,7 @@ describe("filtering (US2)", () => {
       config.accounts,
       logger,
     );
-  const key = (uid: number) => ({ accountId: "school", mailbox: "INBOX", uidValidity: 1, uid });
+  const key = (uid: string) => ({ accountId: "school", mailbox: "INBOX", uidValidity: "1", uid });
 
   beforeEach(async () => {
     server = new FakeMailServer();
