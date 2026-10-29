@@ -69,11 +69,11 @@ export function parseConfig(input: unknown, env: NodeJS.ProcessEnv = process.env
   const raw = parsed.data;
 
   const secrets: string[] = [];
-  const missing: string[] = [];
+  const problems: string[] = [];
   const secret = (path: string, name: string): string => {
     const value = env[name];
     if (!value) {
-      missing.push(`Invalid config: ${path} — environment variable "${name}" is not set`);
+      problems.push(`Invalid config: ${path} — environment variable "${name}" is not set`);
       return "";
     }
     secrets.push(value);
@@ -112,10 +112,17 @@ export function parseConfig(input: unknown, env: NodeJS.ProcessEnv = process.env
       : null;
 
   const t = raw.delivery.telegram;
-  const telegram: TelegramChannelConfig | null =
-    t.enabled && t.bot_token_env && t.chat_id
-      ? { botToken: secret("delivery.telegram.bot_token_env", t.bot_token_env), chatId: t.chat_id }
-      : null;
+  let telegram: TelegramChannelConfig | null = null;
+  if (t.enabled && t.bot_token_env && t.chat_id) {
+    const botToken = secret("delivery.telegram.bot_token_env", t.bot_token_env);
+    if (botToken && !/^\d+:[A-Za-z0-9_-]+$/.test(botToken)) {
+      // Never echo the value: it is a secret even when malformed.
+      problems.push(
+        `Invalid config: delivery.telegram.bot_token_env — "${t.bot_token_env}" is not a Telegram bot token (expected <digits>:<token> from @BotFather)`,
+      );
+    }
+    telegram = { botToken, chatId: t.chat_id };
+  }
 
   const model = (role: "gatekeeper" | "analyst"): ModelConfig => ({
     provider: raw.ai[role].provider,
@@ -128,7 +135,7 @@ export function parseConfig(input: unknown, env: NodeJS.ProcessEnv = process.env
     targetLanguage: raw.ai.target_language,
   };
 
-  if (missing.length > 0) throw new ConfigError(missing.join("\n"));
+  if (problems.length > 0) throw new ConfigError(problems.join("\n"));
 
   return {
     accounts,

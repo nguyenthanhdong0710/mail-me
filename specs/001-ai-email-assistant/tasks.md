@@ -93,15 +93,15 @@ description: "Task list for AI Email Assistant (Self-hosted)"
 
 ### Tests for User Story 2
 
-- [ ] T033 [P] [US2] Rules engine unit tests (whitelist with subdomains and leading `@`, drop keyword in subject or sender only, never in body, case-insensitive whole-word, precedence) in `tests/unit/rules.test.ts`
-- [ ] T034 [P] [US2] Threshold tests (PROMOTION 0.5 → IMPORTANT, SPAM 0.9 → SPAM) in `tests/unit/gatekeeper-threshold.test.ts`
-- [ ] T035 [P] [US2] Integration: promo/phishing → SKIPPED and logged, whitelist → IMPORTANT with no Gatekeeper call, injection fixture → routing unchanged, in `tests/integration/filtering.test.ts`
+- [X] T033 [P] [US2] Rules engine unit tests (whitelist with subdomains and leading `@`, drop keyword in subject or sender only, never in body, case-insensitive whole-word, precedence) in `tests/unit/rules.test.ts`
+- [X] T034 [P] [US2] Threshold tests (PROMOTION 0.5 → IMPORTANT, SPAM 0.9 → SPAM) in `tests/unit/gatekeeper-threshold.test.ts`
+- [X] T035 [P] [US2] Integration: promo/phishing → SKIPPED and logged, whitelist → IMPORTANT with no Gatekeeper call, injection fixture → routing unchanged, in `tests/integration/filtering.test.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T036 [US2] Rules engine in `src/rules/engine.ts`
+- [X] T036 [US2] Rules engine in `src/rules/engine.ts`
 - [X] T037 [US2] Apply `confidence_threshold` in `src/agents/gatekeeper.ts` _(done with US1: threshold applied in `classify()`)_
-- [ ] T038 [US2] Wire rules into the pipeline before the Gatekeeper and record SKIPPED outcomes in `src/orchestrator/pipeline.ts`
+- [X] T038 [US2] Wire rules into the pipeline before the Gatekeeper and record SKIPPED outcomes in `src/orchestrator/pipeline.ts`
 
 **Checkpoint**: Noise filtering works and rule hits cost nothing.
 
@@ -115,25 +115,25 @@ description: "Task list for AI Email Assistant (Self-hosted)"
 
 ### Tests for User Story 3
 
-- [ ] T039 [P] [US3] Integration test for multiple accounts and failure isolation in `tests/integration/multi-account.test.ts`
-- [ ] T054 [P] [US3] Config tests for loop prevention: `delivery.email.to` equal to a monitored address, differing only by case, `+tag` or Gmail dots → rejected with message. No channel enabled → rejected. In `tests/contract/config-delivery.test.ts`
-- [ ] T055 [P] [US3] Rules test: message with `X-Mail-Me` + our install_id → SELF_SENT before every other rule. A foreign `X-Mail-Me` id or `Auto-Submitted` alone → not self-sent. In `tests/unit/rules-self-sent.test.ts`
-- [ ] T056 [P] [US3] Telegram render tests (HTML escaping, only allowed tags, ≤ 4000 chars per part, excerpt shortened before split, split keeps tags balanced, `(i/N)` labels, fallback format) in `tests/unit/telegram-render.test.ts`
-- [ ] T057 [P] [US3] Telegram channel tests with FakeHttpFetch (sendMessage payload, link previews disabled, 429 → retryAfterMs, 400/401/403 → non-retryable, token never in error or log, verify() via getMe + getChat) in `tests/contract/telegram-channel.test.ts`
-- [ ] T058 [US3] Dispatcher integration test (both channels; one fails retryably → retried only that channel, no AI re-call, no duplicate; restart in the middle of delivery → resumes from pending_reports; max_attempts → GAVE_UP and message completed; all channels gave up → DELIVERY_FAILED) in `tests/integration/delivery.test.ts`
+- [X] T039 [P] [US3] Integration test for multiple accounts and failure isolation in `tests/integration/multi-account.test.ts`
+- [X] T054 [P] [US3] Config tests for loop prevention: `delivery.email.to` equal to a monitored address, differing only by case, `+tag` or Gmail dots → rejected with message. No channel enabled → rejected. In `tests/contract/config-delivery.test.ts`
+- [X] T055 [P] [US3] Rules test: message with `X-Mail-Me` + our install_id → SELF_SENT before every other rule. A foreign `X-Mail-Me` id or `Auto-Submitted` alone → not self-sent. In `tests/unit/rules-self-sent.test.ts`
+- [X] T056 [P] [US3] Telegram render tests (HTML escaping, only allowed tags, ≤ 4000 chars per part, excerpt shortened before split, split keeps tags balanced, `(i/N)` labels, fallback format) in `tests/unit/telegram-render.test.ts`
+- [X] T057 [P] [US3] Telegram channel tests with FakeHttpFetch (sendMessage payload, link previews disabled, 429 → retryAfterMs, 400/401/403 → non-retryable, token never in error or log, verify() via getMe + getChat) in `tests/contract/telegram-channel.test.ts`
+- [X] T058 [US3] Dispatcher integration test (both channels; one fails retryably → retried only that channel, no AI re-call, no duplicate; restart in the middle of delivery → resumes from pending_reports; max_attempts → GAVE_UP and message completed; all channels gave up → DELIVERY_FAILED) in `tests/integration/delivery.test.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T040 [US3] One scheduler loop per account/mailbox with per-account error isolation and backoff in `src/orchestrator/scheduler.ts`
+- [X] T040 [US3] One scheduler loop per account/mailbox with per-account error isolation and backoff in `src/orchestrator/scheduler.ts`
 - [X] T041 [US3] Bounded LLM concurrency shared across accounts (semaphore from T013) in `src/agents/llm.ts` _(done with US1: one shared semaphore in `AiSdkLlmClient`)_
-- [ ] T042 [US3] Source account label in both renderers (email header line + `X-Mail-Me-Source`, Telegram 📥 line) in `src/courier/channels/*/render.ts`
-- [ ] T059 [US3] Address normalization + "report address is not monitored" refinement in `src/config/schema.ts` (helper in `src/config/address.ts`)
+- [X] T042 [US3] Source account label in both renderers (email header line + `X-Mail-Me-Source`, Telegram 📥 line) in `src/courier/channels/*/render.ts`
+- [X] T059 [US3] Address normalization + "report address is not monitored" refinement in `src/config/schema.ts` (helper in `src/config/address.ts`)
 - [X] T060 [US3] SELF_SENT rule (first rule after ALREADY_PROCESSED, compares install_id from Store) in `src/rules/engine.ts`. Expose headers in `src/fetcher/imap-source.ts` _(pulled into US1 so the MVP cannot loop on its own reports)_
-- [ ] T061 [P] [US3] Telegram renderer (HTML subset, escaping, shorten/split) in `src/courier/channels/telegram/render.ts`
-- [ ] T062 [P] [US3] Telegram ReportChannel (Bot API via fetch, per-chat 1 msg/s throttle, parts_sent resume, error classification, token redaction, verify()) in `src/courier/channels/telegram/telegram-channel.ts`
-- [X] T063 [US3] Dispatcher (fan-out to enabled channels in parallel, per-channel status/attempts/next_attempt_at, give up at max_attempts, completeReport) in `src/courier/dispatcher.ts`, and drain pending reports at the start of each poll in `src/orchestrator/pipeline.ts` _(core landed with US1 in `src/courier/dispatcher.ts`; T058 multi-channel test still open)_
-- [ ] T064 [US3] Channel factory from config + startup `verify()` (logged, non-blocking) in `src/courier/channels/index.ts`
-- [ ] T065 [P] [US3] CLI `check-delivery` (verify + send test report to each enabled channel) and `telegram-chat-id` (getUpdates → print chat IDs) in `src/index.ts`
+- [X] T061 [P] [US3] Telegram renderer (HTML subset, escaping, shorten/split) in `src/courier/channels/telegram/render.ts`
+- [X] T062 [P] [US3] Telegram ReportChannel (Bot API via fetch, per-chat 1 msg/s throttle, parts_sent resume, error classification, token redaction, verify()) in `src/courier/channels/telegram/telegram-channel.ts`
+- [X] T063 [US3] Dispatcher (fan-out to enabled channels in parallel, per-channel status/attempts/next_attempt_at, give up at max_attempts, completeReport) in `src/courier/dispatcher.ts`, and drain pending reports at the start of each poll in `src/orchestrator/pipeline.ts`
+- [X] T064 [US3] Channel factory from config + startup `verify()` (logged, non-blocking) in `src/courier/channels/index.ts`
+- [X] T065 [P] [US3] CLI `check-delivery` (verify + send test report to each enabled channel) and `telegram-chat-id` (getUpdates → print chat IDs) in `src/index.ts`
 
 **Checkpoint**: Multi-mailbox flow works, with email and/or Telegram delivery and no feedback loops.
 
@@ -145,11 +145,11 @@ description: "Task list for AI Email Assistant (Self-hosted)"
 
 **Independent Test**: `check-config` passes on an edited example and fails with field-named messages on invalid variants. Separate models per role are verified with FakeLlm.
 
-- [ ] T043 [P] [US4] `config.example.json` (no secrets, plain JSON, email enabled + telegram disabled) and `.env.example` (incl. `TELEGRAM_BOT_TOKEN`) at repo root
+- [X] T043 [P] [US4] `config.example.json` (no secrets, plain JSON, email enabled + telegram disabled) and `.env.example` (incl. `TELEGRAM_BOT_TOKEN`) at repo root
 - [X] T044 [P] [US4] `check-config` CLI command (exit 0 / exit 2 with message) in `src/index.ts` _(done with US1)_
-- [ ] T045 [P] [US4] Test that the gatekeeper and analyst roles use their own configured provider and model, in `tests/integration/roles.test.ts`
-- [ ] T046 [US4] `Dockerfile` (multi-stage, non-root, `/app/data` volume) and `docker-compose.yml`
-- [ ] T047 [US4] README: overview, architecture diagram, quickstart (from quickstart.md), privacy notes (incl. Telegram not end-to-end encrypted), Gmail app-password guide, Telegram bot setup
+- [X] T045 [P] [US4] Test that the gatekeeper and analyst roles use their own configured provider and model, in `tests/integration/roles.test.ts`
+- [X] T046 [US4] `Dockerfile` (multi-stage, non-root, `/app/data` volume) and `docker-compose.yml`
+- [X] T047 [US4] README: overview, architecture diagram, quickstart (from quickstart.md), privacy notes (incl. Telegram not end-to-end encrypted), Gmail app-password guide, Telegram bot setup
 
 **Checkpoint**: Ready for self-hosting.
 
@@ -157,10 +157,10 @@ description: "Task list for AI Email Assistant (Self-hosted)"
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T048 [P] Daily retention purge job (`storage.retention_days`) in `src/orchestrator/scheduler.ts`
-- [ ] T049 [P] Optional GreenMail E2E _(test written with US1: `npm run test:e2e`; docker-compose profile still open)_ (`E2E=1`) in `tests/e2e/greenmail.test.ts` with a docker-compose test profile. Asserts that source messages stay unseen, unmoved and unflagged (FR-013)
-- [ ] T050 [P] Gatekeeper evaluation script on a labeled `.eml` set (measures SC-003) in `scripts/eval-gatekeeper.ts`
-- [ ] T051 [P] GitHub Actions CI: typecheck, lint, test in `.github/workflows/ci.yml`
+- [X] T048 [P] Daily retention purge job (`storage.retention_days`) in `src/orchestrator/scheduler.ts`
+- [X] T049 [P] Optional GreenMail E2E (`E2E=1`) in `tests/e2e/greenmail.test.ts` with a docker-compose test profile. Asserts that source messages stay unseen, unmoved and unflagged (FR-013)
+- [X] T050 [P] Gatekeeper evaluation script on a labeled `.eml` set (measures SC-003) in `scripts/eval-gatekeeper.ts`
+- [X] T051 [P] GitHub Actions CI: typecheck, lint, test in `.github/workflows/ci.yml`
 - [X] T052 Graceful shutdown (SIGTERM: finish the in-flight email, close IMAP and DB) in `src/index.ts` _(done with US1: SIGINT/SIGTERM waits for the current pass, then closes the DB)_
 - [ ] T053 Run the quickstart.md validation manually against a real mailbox
 

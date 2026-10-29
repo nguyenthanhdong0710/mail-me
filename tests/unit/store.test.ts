@@ -1,8 +1,13 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import Database from "better-sqlite3";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ProcessedRecord, Report } from "../../src/domain/types.js";
+import { MIGRATIONS } from "../../src/store/migrations/index.js";
 import { SqliteStore } from "../../src/store/sqlite-store.js";
 
-const key = { accountId: "school", uidValidity: 7, uid: 42 };
+const key = { accountId: "school", mailbox: "INBOX", uidValidity: 7, uid: 42 };
 
 const record = (over: Partial<ProcessedRecord> = {}): ProcessedRecord => ({
   key,
@@ -116,5 +121,46 @@ describe("SqliteStore", () => {
     const id = store.getInstallId();
     expect(id).toMatch(/^[0-9a-f-]{36}$/);
     expect(store.getInstallId()).toBe(id);
+  });
+});
+
+describe("migration 002 (mailbox in the message key)", () => {
+  it("moves version-1 rows to INBOX and keeps pending reports usable", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mail-me-"));
+    const path = join(dir, "v1.db");
+    const v1 = new Database(path);
+    v1.exec(
+      "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)",
+    );
+    v1.exec(MIGRATIONS[0]!.sql);
+    v1.prepare("INSERT INTO schema_migrations VALUES (1, '2026-10-01')").run();
+    v1.prepare(
+      `INSERT INTO processed_messages (account_id, uid_validity, uid, message_id, sender, subject,
+         decision, outcome, processed_at) VALUES ('school', 7, 1, '<a@x>', 's', 'old', 'LLM', 'SKIPPED', '2026-10-01')`,
+    ).run();
+    const oldKey = { accountId: "school", uidValidity: 7, uid: 2 };
+    v1.prepare("INSERT INTO pending_reports VALUES ('school', 7, 2, ?, ?, '2026-10-01')").run(
+      JSON.stringify({ key: oldKey }),
+      JSON.stringify({ key: oldKey }),
+    );
+    v1.prepare(
+      "INSERT INTO deliveries (account_id, uid_validity, uid, channel, status, updated_at) VALUES ('school', 7, 2, 'email', 'PENDING', '2026-10-01')",
+    ).run();
+    v1.close();
+
+    const store = new SqliteStore(path);
+    expect(
+      store.isProcessed({ accountId: "school", mailbox: "INBOX", uidValidity: 7, uid: 1 }, null),
+    ).toBe(true);
+    expect(
+      store.isProcessed({ accountId: "school", mailbox: "Work", uidValidity: 7, uid: 1 }, null),
+    ).toBe(false);
+    const [pending] = store.listPendingReports();
+    expect(pending!.report.key).toEqual({ ...oldKey, mailbox: "INBOX" });
+    expect(pending!.deliveries).toMatchObject([
+      { channel: "email", status: "PENDING", key: { mailbox: "INBOX" } },
+    ]);
+    store.close();
+    rmSync(dir, { recursive: true });
   });
 });

@@ -1,5 +1,5 @@
 import { analyze } from "../agents/analyst.js";
-import { classify } from "../agents/gatekeeper.js";
+import { classify, type GatekeeperVerdict } from "../agents/gatekeeper.js";
 import type { AccountConfig, AppConfig } from "../config/load.js";
 import { dispatch } from "../courier/dispatcher.js";
 import { buildReport } from "../courier/report.js";
@@ -49,14 +49,24 @@ export class Pipeline {
   /** One poll of one account: retry pending reports, then process new mail. */
   async pollAccount(account: AccountConfig): Promise<void> {
     await this.drainPending(account.id);
+    // A broken mailbox does not stop the account's other mailboxes; the error is still
+    // raised afterwards so the scheduler can back off.
+    let failure: unknown = null;
     for (const mailbox of account.mailboxes) {
       const source = this.deps.sources(account.id);
       try {
         await this.pollMailbox(account, mailbox, source);
+      } catch (err) {
+        this.deps.logger.error(
+          { account: account.id, mailbox, err: (err as Error).message },
+          "mailbox poll failed",
+        );
+        failure ??= err;
       } finally {
         await source.close().catch(() => {});
       }
     }
+    if (failure) throw failure;
   }
 
   async drainPending(accountId: string): Promise<void> {
@@ -121,19 +131,23 @@ export class Pipeline {
   ): Promise<MessageResult> {
     const { store, llm, logger, config, clock } = this.deps;
     const started = Date.now();
-    const key = { accountId: account.id, uidValidity, uid: raw.uid };
+    const key = { accountId: account.id, mailbox, uidValidity, uid: raw.uid };
     if (store.hasPendingReport(key)) return { settled: true };
 
     const cleaned = await parseAndClean(raw.source, {
       maxBodyChars: config.limits.max_body_chars,
       fallbackDate: raw.internalDate,
     });
-    const email: IncomingEmail = { ...key, mailbox, ...cleaned };
+    const email: IncomingEmail = { ...key, ...cleaned };
     const log = logger.child({ account: account.id, mailbox, uid: raw.uid });
 
     const decision = evaluateRules(email, {
       installId: this.installId,
       isProcessed: (e) => store.isProcessed(e, e.messageId),
+      rules: {
+        whitelistDomains: config.rules.whitelist_domains,
+        dropKeywords: config.rules.drop_keywords,
+      },
     });
     if (decision.kind === "ALREADY_PROCESSED") return { settled: true };
 
@@ -166,36 +180,62 @@ export class Pipeline {
       return { settled: true };
     }
 
-    // decision.kind === "NEEDS_LLM" (whitelist/drop-keyword rules arrive with US2)
-    const verdict = await classify(llm, email, {
-      threshold: config.rules.confidence_threshold,
-      retry: this.deps.retry,
-    });
-    addUsage(verdict.usage);
-    draft.category = verdict.effective;
-    draft.confidence = verdict.result?.confidence_score ?? null;
-
-    if (verdict.effective !== "IMPORTANT") {
+    if (decision.kind === "DROP_KEYWORD") {
       store.recordProcessed({
         ...draft,
-        tokensIn: usage.input,
-        tokensOut: usage.output,
+        decision: "DROP_KEYWORD",
+        category: "PROMOTION",
         outcome: "SKIPPED",
         processedAt: clock.now().toISOString(),
       });
       log.info(
         {
-          decision: "LLM",
-          category: verdict.effective,
-          confidence: draft.confidence,
-          reasoning: verdict.result?.reasoning,
+          decision: "DROP_KEYWORD",
+          keyword: decision.keyword,
+          category: "PROMOTION",
           outcome: "SKIPPED",
-          tokens: usage,
           ms: Date.now() - started,
         },
         "email skipped",
       );
       return { settled: true };
+    }
+
+    let verdict: GatekeeperVerdict | null = null;
+    if (decision.kind === "WHITELIST") {
+      draft.decision = "WHITELIST";
+      draft.category = "IMPORTANT";
+    } else {
+      verdict = await classify(llm, email, {
+        threshold: config.rules.confidence_threshold,
+        retry: this.deps.retry,
+      });
+      addUsage(verdict.usage);
+      draft.category = verdict.effective;
+      draft.confidence = verdict.result?.confidence_score ?? null;
+
+      if (verdict.effective !== "IMPORTANT") {
+        store.recordProcessed({
+          ...draft,
+          tokensIn: usage.input,
+          tokensOut: usage.output,
+          outcome: "SKIPPED",
+          processedAt: clock.now().toISOString(),
+        });
+        log.info(
+          {
+            decision: "LLM",
+            category: verdict.effective,
+            confidence: draft.confidence,
+            reasoning: verdict.result?.reasoning,
+            outcome: "SKIPPED",
+            tokens: usage,
+            ms: Date.now() - started,
+          },
+          "email skipped",
+        );
+        return { settled: true };
+      }
     }
 
     let analysis: AnalysisResult | null = null;
@@ -221,18 +261,24 @@ export class Pipeline {
 
     const [pending] = store
       .listPendingReports(account.id)
-      .filter((p) => p.report.key.uidValidity === uidValidity && p.report.key.uid === raw.uid);
+      .filter(
+        (p) =>
+          p.report.key.mailbox === mailbox &&
+          p.report.key.uidValidity === uidValidity &&
+          p.report.key.uid === raw.uid,
+      );
     const result = pending
       ? await dispatch(pending, this.dispatchDeps())
       : { done: false as const };
 
     log.info(
       {
-        decision: "LLM",
+        decision: draft.decision,
+        ...(decision.kind === "WHITELIST" && { domain: decision.domain }),
         category: "IMPORTANT",
         confidence: draft.confidence,
-        gatekeeperFailed: verdict.failed,
-        lowConfidence: verdict.lowConfidence,
+        gatekeeperFailed: verdict?.failed,
+        lowConfidence: verdict?.lowConfidence,
         analysisFailed: analysis === null,
         outcome: result.done ? result.outcome : "DELIVERY_PENDING",
         tokens: usage,

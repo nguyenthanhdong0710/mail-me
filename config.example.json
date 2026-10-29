@@ -1,0 +1,52 @@
+{
+  "accounts": [
+    {
+      "id": "school",
+      "label": "School",
+      "email": "student@university.edu",
+      "imap": {
+        "host": "imap.gmail.com",
+        "port": 993,
+        "secure": true,
+        "user": "student@university.edu",
+        "password_env": "SCHOOL_IMAP_PASSWORD"
+      },
+      "mailboxes": ["INBOX"],
+      "lookback_hours": 0
+    }
+  ],
+  "delivery": {
+    "email": {
+      "enabled": true,
+      "to": "my_primary_email@gmail.com",
+      "smtp": {
+        "host": "smtp.gmail.com",
+        "port": 465,
+        "secure": true,
+        "user": "my_primary_email@gmail.com",
+        "password_env": "SMTP_PASSWORD",
+        "from": "Mail-Me <my_primary_email@gmail.com>"
+      }
+    },
+    "telegram": {
+      "enabled": false,
+      "bot_token_env": "TELEGRAM_BOT_TOKEN",
+      "chat_id": "123456789"
+    },
+    "max_attempts": 10
+  },
+  "ai": {
+    "gatekeeper": { "provider": "openai", "model": "gpt-5-mini", "api_key_env": "OPENAI_API_KEY" },
+    "analyst": { "provider": "openai", "model": "gpt-5", "api_key_env": "OPENAI_API_KEY" },
+    "target_language": "Vietnamese"
+  },
+  "rules": {
+    "whitelist_domains": ["university.edu"],
+    "drop_keywords": ["sale", "discount", "% off"],
+    "confidence_threshold": 0.7
+  },
+  "schedule": { "poll_interval_seconds": 300 },
+  "limits": { "max_body_chars": 12000, "llm_concurrency": 2, "excerpt_chars": 600 },
+  "storage": { "path": "data/mail-me.db", "retention_days": 90 },
+  "logging": { "level": "info" }
+}

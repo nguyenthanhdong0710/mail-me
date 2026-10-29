@@ -26,8 +26,13 @@ export class AiSdkLlmClient implements LlmClient {
   private readonly models: Record<LlmRole, LanguageModel>;
   private readonly semaphore: Semaphore;
 
-  constructor(cfg: { gatekeeper: ModelConfig; analyst: ModelConfig }, concurrency: number) {
-    this.models = { gatekeeper: createModel(cfg.gatekeeper), analyst: createModel(cfg.analyst) };
+  constructor(
+    cfg: { gatekeeper: ModelConfig; analyst: ModelConfig },
+    concurrency: number,
+    modelFactory: (cfg: ModelConfig) => LanguageModel = createModel,
+  ) {
+    // Each role gets its own provider and model (constitution II, FR-015).
+    this.models = { gatekeeper: modelFactory(cfg.gatekeeper), analyst: modelFactory(cfg.analyst) };
     this.semaphore = new Semaphore(concurrency);
   }
 

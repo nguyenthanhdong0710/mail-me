@@ -11,12 +11,13 @@ export interface Address {
 /** Identity of a message inside one mailbox generation (see research R2). */
 export interface MessageKey {
   accountId: string;
+  /** UIDs are only unique within one mailbox, so the mailbox is part of the key. */
+  mailbox: string;
   uidValidity: number;
   uid: number;
 }
 
 export interface IncomingEmail extends MessageKey {
-  mailbox: string;
   messageId: string | null;
   from: Address;
   subject: string;

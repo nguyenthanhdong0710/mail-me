@@ -41,14 +41,30 @@ export async function dispatch(
         return updated;
       }
 
+      let partsSent = row.partsSent;
       try {
-        const { externalId } = await retry(() => channel.deliver(report), {
-          ...deps.retry,
-          shouldRetry: (err) => !(err instanceof ChannelError) || err.retryable,
-        });
+        const { externalId } = await retry(
+          async () => {
+            try {
+              return await channel.deliver(report, { partsSent });
+            } catch (err) {
+              if (err instanceof ChannelError && err.partsSent !== undefined) {
+                partsSent = err.partsSent;
+              }
+              throw err;
+            }
+          },
+          {
+            ...deps.retry,
+            // A server-requested wait (Telegram 429) is honoured on a later poll instead.
+            shouldRetry: (err) =>
+              !(err instanceof ChannelError) || (err.retryable && err.retryAfterMs === undefined),
+          },
+        );
         const updated = {
           ...row,
           status: "DELIVERED" as const,
+          partsSent,
           attempts: row.attempts + 1,
           externalId,
           lastError: null,
@@ -65,6 +81,7 @@ export async function dispatch(
           ...row,
           status: giveUp ? "GAVE_UP" : "PENDING",
           attempts,
+          partsSent,
           lastError: ce.message,
           nextAttemptAt: ce.retryAfterMs
             ? new Date(now.getTime() + ce.retryAfterMs).toISOString()

@@ -3,6 +3,8 @@ import {
   ChannelError,
   LlmError,
   type Clock,
+  type DeliveryProgress,
+  type HttpFetch,
   type LlmClient,
   type LlmRole,
   type MailSource,
@@ -94,6 +96,7 @@ export class FakeMailServer {
 
 export class FakeChannel implements ReportChannel {
   readonly delivered: Report[] = [];
+  readonly progress: Array<DeliveryProgress | undefined> = [];
   private failures: ChannelError[] = [];
   verifyCalls = 0;
 
@@ -106,7 +109,8 @@ export class FakeChannel implements ReportChannel {
     }
   }
 
-  async deliver(report: Report): Promise<{ externalId: string }> {
+  async deliver(report: Report, progress?: DeliveryProgress): Promise<{ externalId: string }> {
+    this.progress.push(progress);
     const failure = this.failures.shift();
     if (failure) throw failure;
     this.delivered.push(report);
@@ -117,6 +121,71 @@ export class FakeChannel implements ReportChannel {
     this.verifyCalls++;
   }
 }
+
+// ---------------------------------------------------------------- http (Telegram Bot API)
+
+export interface FakeHttpCall {
+  url: string;
+  method: string;
+  body: Record<string, unknown>;
+}
+
+type HttpReply = { status?: number; json: unknown } | Error;
+
+/**
+ * Scripted `fetch`. Replies are matched by Bot API method name (the last URL segment);
+ * queued replies are used first, then the default for that method, then `{ ok: true }`.
+ */
+export class FakeHttpFetch {
+  readonly calls: FakeHttpCall[] = [];
+  private readonly queued = new Map<string, HttpReply[]>();
+  private readonly defaults = new Map<string, HttpReply>();
+  private nextMessageId = 100;
+
+  /** Queue one-off replies for `method`. */
+  reply(method: string, ...replies: HttpReply[]): this {
+    this.queued.set(method, [...(this.queued.get(method) ?? []), ...replies]);
+    return this;
+  }
+
+  /** Reply used for every call to `method` once the queue is empty. */
+  always(method: string, reply: HttpReply): this {
+    this.defaults.set(method, reply);
+    return this;
+  }
+
+  callsTo(method: string): FakeHttpCall[] {
+    return this.calls.filter((c) => c.method === method);
+  }
+
+  fetch: HttpFetch = async (url, init) => {
+    const method = url.slice(url.lastIndexOf("/") + 1);
+    const body = JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>;
+    this.calls.push({ url, method, body });
+    const reply = this.queued.get(method)?.shift() ??
+      this.defaults.get(method) ?? {
+        json: {
+          ok: true,
+          result: method === "sendMessage" ? { message_id: this.nextMessageId++ } : true,
+        },
+      };
+    if (reply instanceof Error) throw reply;
+    return new Response(JSON.stringify(reply.json), {
+      status: reply.status ?? 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+}
+
+export const telegramError = (status: number, description: string, retryAfter?: number) => ({
+  status,
+  json: {
+    ok: false,
+    error_code: status,
+    description,
+    ...(retryAfter !== undefined && { parameters: { retry_after: retryAfter } }),
+  },
+});
 
 // ---------------------------------------------------------------- llm
 
@@ -184,4 +253,26 @@ export class FakeClock implements Clock {
   advance(ms: number): void {
     this.current = new Date(this.current.getTime() + ms);
   }
+}
+
+// ---------------------------------------------------------------- report
+
+export function sampleReport(overrides: Partial<Report> = {}): Report {
+  return {
+    key: { accountId: "school", mailbox: "INBOX", uidValidity: 1, uid: 5 },
+    source: { accountId: "school", label: "School" },
+    original: {
+      messageId: "<orig@university.edu>",
+      from: { name: "Prof. Nguyen", address: "prof@university.edu" },
+      subject: "Assignment 3",
+      receivedAt: "2026-10-28T02:15:00.000Z",
+    },
+    kind: "SUMMARY",
+    analysis: analysis() as Report["analysis"],
+    excerpt: "Please submit before Friday 5pm.",
+    truncated: false,
+    urgent: false,
+    actionNeeded: true,
+    ...overrides,
+  };
 }

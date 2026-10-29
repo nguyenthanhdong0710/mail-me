@@ -11,7 +11,12 @@ export function buildReport(
       ? `${email.text.slice(0, excerptChars).trimEnd()}…`
       : email.text;
   return {
-    key: { accountId: email.accountId, uidValidity: email.uidValidity, uid: email.uid },
+    key: {
+      accountId: email.accountId,
+      mailbox: email.mailbox,
+      uidValidity: email.uidValidity,
+      uid: email.uid,
+    },
     source,
     original: {
       messageId: email.messageId,

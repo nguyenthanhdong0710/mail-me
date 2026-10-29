@@ -18,6 +18,7 @@ import { MIGRATIONS } from "./migrations/index.js";
 
 interface DeliveryDbRow {
   account_id: string;
+  mailbox: string;
   uid_validity: number;
   uid: number;
   channel: string;
@@ -31,6 +32,7 @@ interface DeliveryDbRow {
 
 const keyParams = (k: MessageKey) => ({
   account_id: k.accountId,
+  mailbox: k.mailbox,
   uid_validity: k.uidValidity,
   uid: k.uid,
 });
@@ -95,7 +97,7 @@ export class SqliteStore implements Store {
   isProcessed(key: MessageKey, messageId: string | null): boolean {
     const byUid = this.db
       .prepare(
-        "SELECT 1 FROM processed_messages WHERE account_id = @account_id AND uid_validity = @uid_validity AND uid = @uid",
+        "SELECT 1 FROM processed_messages WHERE account_id = @account_id AND mailbox = @mailbox AND uid_validity = @uid_validity AND uid = @uid",
       )
       .get(keyParams(key));
     if (byUid) return true;
@@ -117,7 +119,7 @@ export class SqliteStore implements Store {
           { decision: string; category: string | null; outcome: string }
         >(
           `SELECT decision, category, outcome FROM processed_messages
-           WHERE account_id = @account_id AND uid_validity = @uid_validity AND uid = @uid`,
+           WHERE account_id = @account_id AND mailbox = @mailbox AND uid_validity = @uid_validity AND uid = @uid`,
         )
         .get(keyParams(key)) ?? null
     );
@@ -126,7 +128,7 @@ export class SqliteStore implements Store {
   hasPendingReport(key: MessageKey): boolean {
     return !!this.db
       .prepare(
-        "SELECT 1 FROM pending_reports WHERE account_id = @account_id AND uid_validity = @uid_validity AND uid = @uid",
+        "SELECT 1 FROM pending_reports WHERE account_id = @account_id AND mailbox = @mailbox AND uid_validity = @uid_validity AND uid = @uid",
       )
       .get(keyParams(key));
   }
@@ -135,9 +137,9 @@ export class SqliteStore implements Store {
     this.db
       .prepare(
         `INSERT OR IGNORE INTO processed_messages
-           (account_id, uid_validity, uid, message_id, sender, subject, decision, category,
+           (account_id, mailbox, uid_validity, uid, message_id, sender, subject, decision, category,
             confidence, outcome, tokens_in, tokens_out, processed_at)
-         VALUES (@account_id, @uid_validity, @uid, @message_id, @sender, @subject, @decision,
+         VALUES (@account_id, @mailbox, @uid_validity, @uid, @message_id, @sender, @subject, @decision,
                  @category, @confidence, @outcome, @tokens_in, @tokens_out, @processed_at)`,
       )
       .run({
@@ -166,7 +168,7 @@ export class SqliteStore implements Store {
         .prepare(
           `DELETE FROM deliveries WHERE updated_at < ? AND NOT EXISTS (
              SELECT 1 FROM pending_reports p WHERE p.account_id = deliveries.account_id
-               AND p.uid_validity = deliveries.uid_validity AND p.uid = deliveries.uid)`,
+               AND p.mailbox = deliveries.mailbox AND p.uid_validity = deliveries.uid_validity AND p.uid = deliveries.uid)`,
         )
         .run(cutoff);
       return res.changes;
@@ -178,8 +180,8 @@ export class SqliteStore implements Store {
     this.db.transaction(() => {
       this.db
         .prepare(
-          `INSERT OR IGNORE INTO pending_reports (account_id, uid_validity, uid, report_json, draft_json, created_at)
-           VALUES (@account_id, @uid_validity, @uid, @report_json, @draft_json, @created_at)`,
+          `INSERT OR IGNORE INTO pending_reports (account_id, mailbox, uid_validity, uid, report_json, draft_json, created_at)
+           VALUES (@account_id, @mailbox, @uid_validity, @uid, @report_json, @draft_json, @created_at)`,
         )
         .run({
           ...keyParams(report.key),
@@ -188,8 +190,8 @@ export class SqliteStore implements Store {
           created_at: now,
         });
       const insert = this.db.prepare(
-        `INSERT OR IGNORE INTO deliveries (account_id, uid_validity, uid, channel, status, updated_at)
-         VALUES (@account_id, @uid_validity, @uid, @channel, 'PENDING', @updated_at)`,
+        `INSERT OR IGNORE INTO deliveries (account_id, mailbox, uid_validity, uid, channel, status, updated_at)
+         VALUES (@account_id, @mailbox, @uid_validity, @uid, @channel, 'PENDING', @updated_at)`,
       );
       for (const channel of channels) {
         insert.run({ ...keyParams(report.key), channel, updated_at: now });
@@ -203,24 +205,27 @@ export class SqliteStore implements Store {
         [],
         {
           account_id: string;
+          mailbox: string;
           uid_validity: number;
           uid: number;
           report_json: string;
           draft_json: string;
         }
       >(
-        `SELECT account_id, uid_validity, uid, report_json, draft_json FROM pending_reports
+        `SELECT account_id, mailbox, uid_validity, uid, report_json, draft_json FROM pending_reports
          ORDER BY created_at, uid`,
       )
       .all()
       .filter((r) => accountId === undefined || r.account_id === accountId);
-    const deliveriesFor = this.db.prepare<[string, number, number], DeliveryDbRow>(
-      "SELECT * FROM deliveries WHERE account_id = ? AND uid_validity = ? AND uid = ? ORDER BY channel",
+    const deliveriesFor = this.db.prepare<[string, string, number, number], DeliveryDbRow>(
+      "SELECT * FROM deliveries WHERE account_id = ? AND mailbox = ? AND uid_validity = ? AND uid = ? ORDER BY channel",
     );
     return reports.map((r) => ({
       report: JSON.parse(r.report_json) as Report,
       draft: JSON.parse(r.draft_json) as DraftRecord,
-      deliveries: deliveriesFor.all(r.account_id, r.uid_validity, r.uid).map(toDeliveryRow),
+      deliveries: deliveriesFor
+        .all(r.account_id, r.mailbox, r.uid_validity, r.uid)
+        .map(toDeliveryRow),
     }));
   }
 
@@ -230,7 +235,7 @@ export class SqliteStore implements Store {
         `UPDATE deliveries SET status = @status, attempts = @attempts, parts_sent = @parts_sent,
            external_id = @external_id, last_error = @last_error, next_attempt_at = @next_attempt_at,
            updated_at = @updated_at
-         WHERE account_id = @account_id AND uid_validity = @uid_validity AND uid = @uid AND channel = @channel`,
+         WHERE account_id = @account_id AND mailbox = @mailbox AND uid_validity = @uid_validity AND uid = @uid AND channel = @channel`,
       )
       .run({
         ...keyParams(row.key),
@@ -250,7 +255,7 @@ export class SqliteStore implements Store {
       this.recordProcessed(record);
       this.db
         .prepare(
-          "DELETE FROM pending_reports WHERE account_id = @account_id AND uid_validity = @uid_validity AND uid = @uid",
+          "DELETE FROM pending_reports WHERE account_id = @account_id AND mailbox = @mailbox AND uid_validity = @uid_validity AND uid = @uid",
         )
         .run(keyParams(record.key));
     })();
@@ -273,7 +278,7 @@ export class SqliteStore implements Store {
 
 function toDeliveryRow(r: DeliveryDbRow): DeliveryRow {
   return {
-    key: { accountId: r.account_id, uidValidity: r.uid_validity, uid: r.uid },
+    key: { accountId: r.account_id, mailbox: r.mailbox, uidValidity: r.uid_validity, uid: r.uid },
     channel: r.channel as ChannelName,
     status: r.status as DeliveryStatus,
     attempts: r.attempts,

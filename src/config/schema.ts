@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sameMailbox } from "./address.js";
 
 // contracts/config.schema.md
 
@@ -139,6 +140,20 @@ export const configSchema = z
       .strict()
       .prefault({}),
   })
-  .strict();
+  .strict()
+  .superRefine((cfg, ctx) => {
+    // Reports sent to a monitored mailbox would be read back in (FR-021, research R15).
+    const to = cfg.delivery.email.enabled ? cfg.delivery.email.to : undefined;
+    if (!to) return;
+    const i = cfg.accounts.findIndex(
+      (a) => sameMailbox(to, a.email) || sameMailbox(to, a.imap.user),
+    );
+    if (i < 0) return;
+    ctx.addIssue({
+      code: "custom",
+      path: ["delivery", "email", "to"],
+      message: `"${to}" is also monitored by accounts[${i}] ("${cfg.accounts[i]!.id}"). Reports would be read back in. Use an address that is not monitored.`,
+    });
+  });
 
 export type RawConfig = z.infer<typeof configSchema>;

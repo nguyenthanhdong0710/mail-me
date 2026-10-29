@@ -32,7 +32,7 @@ describe("pipeline (US1)", () => {
       retry: fast,
     });
   const poll = (p = pipeline()) => runOnce(p, config.accounts, logger);
-  const key = (uid: number) => ({ accountId: "school", uidValidity: 1, uid });
+  const key = (uid: number) => ({ accountId: "school", mailbox: "INBOX", uidValidity: 1, uid });
 
   beforeEach(async () => {
     server = new FakeMailServer();

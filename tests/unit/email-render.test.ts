@@ -5,7 +5,7 @@ import type { Report } from "../../src/domain/types.js";
 import { analysis } from "../fakes/index.js";
 
 const base: Report = {
-  key: { accountId: "school", uidValidity: 1, uid: 5 },
+  key: { accountId: "school", mailbox: "INBOX", uidValidity: 1, uid: 5 },
   source: { accountId: "school", label: "School" },
   original: {
     messageId: "<orig@university.edu>",

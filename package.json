@@ -14,13 +14,16 @@
     "start": "tsx src/index.ts start",
     "run-once": "tsx src/index.ts run-once",
     "check-config": "tsx src/index.ts check-config",
+    "check-delivery": "tsx src/index.ts check-delivery",
+    "telegram-chat-id": "tsx src/index.ts telegram-chat-id",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "start:prod": "node dist/index.js start",
-    "test:e2e": "E2E=1 vitest run tests/e2e"
+    "test:e2e": "E2E=1 vitest run tests/e2e",
+    "eval:gatekeeper": "tsx scripts/eval-gatekeeper.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.91",

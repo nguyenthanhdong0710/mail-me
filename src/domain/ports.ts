@@ -46,9 +46,14 @@ export class LlmError extends Error {
   override name = "LlmError";
 }
 
+/** Where a multi-part delivery (Telegram split) left off; parts before it are not re-sent. */
+export interface DeliveryProgress {
+  partsSent: number;
+}
+
 export interface ReportChannel {
   readonly name: ChannelName;
-  deliver(report: Report): Promise<{ externalId: string }>;
+  deliver(report: Report, progress?: DeliveryProgress): Promise<{ externalId: string }>;
   verify(): Promise<void>;
 }
 
@@ -58,10 +63,15 @@ export class ChannelError extends Error {
     message: string,
     readonly retryable: boolean,
     readonly retryAfterMs?: number,
+    /** Parts delivered before the failure, for channels that split a report. */
+    readonly partsSent?: number,
   ) {
     super(message);
   }
 }
+
+/** Thin HTTP seam used by the Telegram channel so tests can fake the Bot API. */
+export type HttpFetch = (url: string, init: RequestInit) => Promise<Response>;
 
 export interface Store {
   getMailboxState(accountId: string, mailbox: string): MailboxState | null;

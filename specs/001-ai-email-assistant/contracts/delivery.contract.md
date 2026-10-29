@@ -3,7 +3,7 @@
 ## Report (channel-neutral input)
 ```ts
 type Report = {
-  key: { accountId: string; uidValidity: number; uid: number };
+  key: { accountId: string; mailbox: string; uidValidity: number; uid: number };
   source: { accountId: string; label: string };
   original: { messageId: string | null; from: { name?: string; address: string }; subject: string; receivedAt: string };
   kind: "SUMMARY" | "FALLBACK";          // FALLBACK = AI analysis failed

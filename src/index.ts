@@ -1,14 +1,16 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import dotenv from "dotenv";
 import { AiSdkLlmClient } from "./agents/llm.js";
 import { ConfigError, loadConfig, type AppConfig } from "./config/load.js";
-import { EmailChannel } from "./courier/channels/email/smtp-channel.js";
-import { systemClock, type ReportChannel, type Store } from "./domain/ports.js";
-import type { ChannelName } from "./domain/types.js";
+import { buildChannels, verifyChannels } from "./courier/channels/index.js";
+import { findChats, TelegramBotApi } from "./courier/channels/telegram/telegram-channel.js";
+import { systemClock } from "./domain/ports.js";
+import type { Report } from "./domain/types.js";
 import { imapSourceFactory } from "./fetcher/imap-source.js";
-import { createLogger, type Logger } from "./lib/logger.js";
+import { createLogger } from "./lib/logger.js";
 import { Pipeline } from "./orchestrator/pipeline.js";
-import { runOnce, startScheduler } from "./orchestrator/scheduler.js";
+import { runOnce, startRetentionJob, startScheduler } from "./orchestrator/scheduler.js";
 import { SqliteStore } from "./store/sqlite-store.js";
 
 const USAGE = `Usage: mail-me <command> [--config path]
@@ -16,42 +18,90 @@ const USAGE = `Usage: mail-me <command> [--config path]
 Commands:
   start          Poll all accounts on the configured interval
   run-once       Poll all accounts once and exit (for cron / systemd timers)
-  check-config   Validate the config and secrets, then exit`;
+  check-config   Validate the config and secrets, then exit
+  check-delivery Send a test report to every enabled delivery channel
+  telegram-chat-id
+                 List the chats that have messaged your Telegram bot (send it /start first)`;
 
 function configPath(argv: string[]): string {
   const i = argv.indexOf("--config");
   return (i >= 0 ? argv[i + 1] : undefined) ?? process.env.MAIL_ME_CONFIG ?? "config.json";
 }
 
-function buildChannels(config: AppConfig, store: Store): Map<ChannelName, ReportChannel> {
-  const channels = new Map<ChannelName, ReportChannel>();
-  if (config.delivery.email) {
-    channels.set("email", new EmailChannel(config.delivery.email, store.getInstallId()));
-  }
-  if (config.delivery.telegram) {
-    throw new ConfigError(
-      "Invalid config: delivery.telegram — the Telegram channel is not implemented yet; set enabled: false",
-    );
-  }
-  return channels;
+/** A harmless report used by `check-delivery` (FR-025). */
+function testReport(config: AppConfig): Report {
+  const now = new Date().toISOString();
+  return {
+    key: { accountId: "check-delivery", mailbox: "INBOX", uidValidity: 0, uid: 0 },
+    source: { accountId: "check-delivery", label: "Mail-Me setup check" },
+    original: {
+      messageId: null,
+      from: { name: "Mail-Me", address: "mail-me@localhost" },
+      subject: "Test report",
+      receivedAt: now,
+    },
+    kind: "SUMMARY",
+    analysis: {
+      original_language: "English",
+      summary: `Delivery works. Real reports will be summarized in ${config.ai.targetLanguage}.`,
+      key_points: [`Monitored accounts: ${config.accounts.map((a) => a.label).join(", ")}`],
+      action_items: [],
+      requires_immediate_attention: false,
+    },
+    excerpt: "This is a test report sent by `mail-me check-delivery`.",
+    truncated: false,
+    urgent: false,
+    actionNeeded: false,
+  };
 }
 
-async function verifyChannels(
-  channels: Map<ChannelName, ReportChannel>,
-  logger: Logger,
-): Promise<void> {
+async function checkDelivery(config: AppConfig): Promise<number> {
+  const store = new SqliteStore(config.storage.path);
+  const channels = buildChannels(config, store.getInstallId());
+  store.close();
+  let failures = 0;
   for (const channel of channels.values()) {
     try {
       await channel.verify();
-      logger.info({ channel: channel.name }, "delivery channel ready");
+      const { externalId } = await channel.deliver(testReport(config));
+      console.log(`✓ ${channel.name}: test report sent (${externalId})`);
     } catch (err) {
-      // Not fatal: the network may be down at startup; deliveries are retried later.
-      logger.error(
-        { channel: channel.name, err: (err as Error).message },
-        "delivery channel check failed",
-      );
+      console.error(`✗ ${channel.name}: ${(err as Error).message}`);
+      failures++;
     }
   }
+  return failures === 0 ? 0 : 1;
+}
+
+/**
+ * Setup helper: runs before the config is valid (chat_id is not known yet), so it only
+ * reads which env var holds the token, defaulting to TELEGRAM_BOT_TOKEN.
+ */
+async function telegramChatId(path: string): Promise<number> {
+  let envName = "TELEGRAM_BOT_TOKEN";
+  try {
+    const raw = JSON.parse(readFileSync(path, "utf8")) as {
+      delivery?: { telegram?: { bot_token_env?: unknown } };
+    };
+    const name = raw.delivery?.telegram?.bot_token_env;
+    if (typeof name === "string" && name) envName = name;
+  } catch {
+    // No or unreadable config yet: use the default name.
+  }
+  const token = process.env[envName];
+  if (!token) {
+    console.error(`Set ${envName} to your bot token from @BotFather first.`);
+    return 2;
+  }
+  const api = new TelegramBotApi(token);
+  const chats = await findChats(api);
+  if (chats.length === 0) {
+    console.log("No chats found. Open your bot in Telegram, send it /start, then run this again.");
+    return 1;
+  }
+  console.log("Chats that messaged your bot (put one in delivery.telegram.chat_id as a string):");
+  for (const c of chats) console.log(`  ${c.id}\t${c.type}\t${c.name}`);
+  return 0;
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -62,6 +112,7 @@ async function main(argv: string[]): Promise<number> {
   }
   dotenv.config({ quiet: true });
 
+  if (command === "telegram-chat-id") return telegramChatId(configPath(argv));
   const config = loadConfig(configPath(argv));
   if (command === "check-config") {
     console.log(
@@ -74,6 +125,7 @@ async function main(argv: string[]): Promise<number> {
     );
     return 0;
   }
+  if (command === "check-delivery") return checkDelivery(config);
   if (command !== "start" && command !== "run-once") {
     console.error(`Unknown command "${command}"\n\n${USAGE}`);
     return 1;
@@ -81,10 +133,7 @@ async function main(argv: string[]): Promise<number> {
 
   const logger = createLogger({ level: config.logLevel, secrets: config.secrets });
   const store = new SqliteStore(config.storage.path);
-  const purged = store.purgeOlderThan(config.storage.retention_days, new Date());
-  if (purged > 0) logger.info({ purged }, "old processing records removed");
-
-  const channels = buildChannels(config, store);
+  const channels = buildChannels(config, store.getInstallId());
   await verifyChannels(channels, logger);
 
   const pipeline = new Pipeline({
@@ -98,6 +147,7 @@ async function main(argv: string[]): Promise<number> {
   });
 
   if (command === "run-once") {
+    store.purgeOlderThan(config.storage.retention_days, new Date());
     await runOnce(pipeline, config.accounts, logger);
     store.close();
     return 0;
@@ -107,6 +157,7 @@ async function main(argv: string[]): Promise<number> {
     { accounts: config.accounts.map((a) => a.id), intervalSeconds: config.pollIntervalSeconds },
     "mail-me started",
   );
+  const stopRetention = startRetentionJob(store, config.storage.retention_days, logger);
   const stop = startScheduler(pipeline, config.accounts, config.pollIntervalSeconds * 1000, logger);
   await new Promise<void>((resolve) => {
     const shutdown = () => resolve();
@@ -114,7 +165,7 @@ async function main(argv: string[]): Promise<number> {
     process.once("SIGTERM", shutdown);
   });
   logger.info("shutting down");
-  await stop();
+  await Promise.all([stop(), stopRetention()]);
   store.close();
   return 0;
 }

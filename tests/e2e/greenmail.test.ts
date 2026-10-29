@@ -12,7 +12,9 @@ import { testConfig } from "../fakes/config.js";
 import { FakeClock, FakeLlm } from "../fakes/index.js";
 import { fixture } from "../fixtures/load.js";
 
-// Real IMAP + SMTP against GreenMail, with a fake LLM. Run with `npm run test:e2e`:
+// Real IMAP + SMTP against GreenMail, with a fake LLM. Run with `npm run test:e2e` after
+//   docker compose --profile test up -d greenmail
+// or, without compose:
 //   docker run -d --name mailme-greenmail -p 3025:3025 -p 3143:3143 \
 //     -e GREENMAIL_OPTS='-Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imap
 //       -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users.login=email
@@ -115,9 +117,13 @@ describe.skipIf(!process.env.E2E)("e2e: GreenMail IMAP + SMTP", () => {
   });
 
   it("leaves the source mailbox untouched (FR-013)", async () => {
-    const inbox = await messages("student@university.edu");
-    expect(inbox.length).toBeGreaterThan(0);
-    for (const m of inbox) expect(m.flags).not.toContain("\\Seen");
+    const before = await messages("student@university.edu");
+    expect(before.length).toBeGreaterThan(0);
+    await poll();
+    const after = await messages("student@university.edu");
+    // Nothing moved or deleted, and no flag set (\\Recent is server-managed).
+    expect(after.map((m) => m.uid)).toEqual(before.map((m) => m.uid));
+    for (const m of after) expect(m.flags.filter((f) => f !== "\\Recent")).toEqual([]);
   });
 
   it("skips its own report when it lands in a monitored mailbox (FR-022)", async () => {

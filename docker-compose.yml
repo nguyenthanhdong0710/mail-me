@@ -1,0 +1,25 @@
+services:
+  mail-me:
+    build: .
+    image: mail-me:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - ./data:/app/data
+    # Keep storage.path in config.json at its default ("data/mail-me.db") so the database
+    # lands in the ./data volume.
+
+  # Local IMAP + SMTP server for `npm run test:e2e` only:
+  #   docker compose --profile test up -d greenmail
+  greenmail:
+    image: greenmail/standalone:2.1.3
+    profiles: ["test"]
+    ports:
+      - "3025:3025" # SMTP
+      - "3143:3143" # IMAP
+    environment:
+      GREENMAIL_OPTS: >-
+        -Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imap
+        -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users.login=email
+        -Dgreenmail.users=student:secret@university.edu,me:secret@primary.example

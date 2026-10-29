@@ -58,9 +58,10 @@ The channel-neutral result for one email. Its shape is defined in `contracts/del
 | Column | Type | Notes |
 |---|---|---|
 | account_id | TEXT | PK part |
+| mailbox | TEXT | PK part. UIDs are only unique within one mailbox (migration 002) |
 | uid_validity | INTEGER | PK part |
 | uid | INTEGER | PK part |
-| message_id | TEXT | indexed. Secondary dedup |
+| message_id | TEXT | indexed. Secondary dedup (per account, across mailboxes) |
 | sender | TEXT | address only |
 | subject | TEXT | |
 | decision | TEXT | `SELF_SENT \| WHITELIST \| DROP_KEYWORD \| LLM` |
@@ -75,7 +76,7 @@ No body text is stored (Principle I). Rows older than `storage.retention_days` (
 ### `pending_reports`
 | Column | Type | Notes |
 |---|---|---|
-| account_id, uid_validity, uid | PK | same key as processed_messages |
+| account_id, mailbox, uid_validity, uid | PK | same key as processed_messages |
 | report_json | TEXT | serialized Report (summary + excerpt, no full body). Deleted once complete |
 | draft_json | TEXT | processing record without its final outcome (decision, category, tokens), written to processed_messages on completion |
 | created_at | TEXT (ISO) | |
@@ -83,7 +84,7 @@ No body text is stored (Principle I). Rows older than `storage.retention_days` (
 ### `deliveries`
 | Column | Type | Notes |
 |---|---|---|
-| account_id, uid_validity, uid, channel | PK | channel = `email \| telegram` |
+| account_id, mailbox, uid_validity, uid, channel | PK | channel = `email \| telegram` |
 | status | TEXT | `PENDING \| DELIVERED \| GAVE_UP` |
 | attempts | INTEGER | |
 | parts_sent | INTEGER | Telegram split progress (0 for email) |
