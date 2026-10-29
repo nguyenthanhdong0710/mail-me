@@ -1,0 +1,11 @@
+From: ShopNow <deals@shopnow.example>
+To: student@university.edu
+Subject: Flash sale: 50% discount on everything
+Date: Wed, 28 Oct 2026 10:00:00 +0700
+Message-ID: <promo-123@shopnow.example>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+
+<html><body><h1>Flash sale!</h1><p>Everything is <b>50% off</b> today only.</p>
+<p><a href="https://shopnow.example/sale">Shop now</a></p>
+<p style="font-size:10px">Unsubscribe here</p></body></html>

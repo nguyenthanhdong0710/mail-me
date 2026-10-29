@@ -1,0 +1,10 @@
+From: "IT Support" <support@secure-login.example>
+To: student@university.edu
+Subject: Your mailbox will be suspended
+Date: Wed, 28 Oct 2026 11:00:00 +0700
+Message-ID: <phish-1@secure-login.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Your mailbox storage is full. Verify your password within 24 hours at
+http://secure-login.example/verify or your account will be suspended.

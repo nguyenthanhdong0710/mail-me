@@ -1,0 +1,54 @@
+{
+  "name": "mail-me",
+  "version": "0.1.0",
+  "description": "Self-hosted AI email assistant: classifies, summarizes and translates your mail, then reports it to you.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node -e \"require('fs').cpSync('src/agents/prompts','dist/agents/prompts',{recursive:true})\"",
+    "start": "tsx src/index.ts start",
+    "run-once": "tsx src/index.ts run-once",
+    "check-config": "tsx src/index.ts check-config",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "start:prod": "node dist/index.js start",
+    "test:e2e": "E2E=1 vitest run tests/e2e"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "4.0.91",
+    "@ai-sdk/google": "4.0.107",
+    "@ai-sdk/openai": "4.0.104",
+    "ai": "7.0.156",
+    "better-sqlite3": "13.0.3",
+    "dotenv": "18.0.9",
+    "html-to-text": "10.0.1",
+    "imapflow": "2.9.1",
+    "mailparser": "3.12.4",
+    "nodemailer": "10.3.0",
+    "pino": "10.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/better-sqlite3": "9.6.0",
+    "@types/html-to-text": "9.0.4",
+    "@types/mailparser": "3.9.0",
+    "@types/node": "24.19.2",
+    "@types/nodemailer": "8.0.2",
+    "@vitest/coverage-v8": "5.0.5",
+    "eslint": "10.13.0",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.0.5"
+  }
+}

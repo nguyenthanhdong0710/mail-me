@@ -1,0 +1,15 @@
+From: HR <hr@mycompany.com>
+To: student@university.edu
+Subject: Signed contract
+Date: Wed, 28 Oct 2026 14:00:00 +0700
+Message-ID: <contract-9@mycompany.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOUNDARY"
+
+--BOUNDARY
+Content-Type: application/pdf; name="contract.pdf"
+Content-Disposition: attachment; filename="contract.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKJcfsj6IKMSAwIG9iago8PD4+CmVuZG9iagp0cmFpbGVyCjw8Pj4KJSVFT0YK
+--BOUNDARY--

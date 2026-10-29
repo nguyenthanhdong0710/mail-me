@@ -77,6 +77,7 @@ No body text is stored (Principle I). Rows older than `storage.retention_days` (
 |---|---|---|
 | account_id, uid_validity, uid | PK | same key as processed_messages |
 | report_json | TEXT | serialized Report (summary + excerpt, no full body). Deleted once complete |
+| draft_json | TEXT | processing record without its final outcome (decision, category, tokens), written to processed_messages on completion |
 | created_at | TEXT (ISO) | |
 
 ### `deliveries`

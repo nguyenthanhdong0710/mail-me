@@ -25,12 +25,12 @@ description: "Task list for AI Email Assistant (Self-hosted)"
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Create directory layout from plan.md (`src/{config,domain,fetcher,rules,agents/prompts,courier,store/migrations,orchestrator,lib}`, `tests/{unit,contract,integration,fakes,fixtures/emails}`)
-- [ ] T002 Initialize `package.json` (type: module, engines node ≥22, scripts: build, start, run-once, check-config, test, lint, typecheck) and install pinned deps from research.md
-- [ ] T003 [P] Add `tsconfig.json` (strict, NodeNext, outDir `dist`) and a `tsx` dev runner
-- [ ] T004 [P] Configure ESLint + Prettier (`eslint.config.js`, `.prettierrc`)
-- [ ] T005 [P] Configure Vitest (`vitest.config.ts`) with `tests/` globs and coverage
-- [ ] T006 [P] Update `.gitignore` (`data/`, `.env`, `config.json`, `dist/`)
+- [X] T001 Create directory layout from plan.md (`src/{config,domain,fetcher,rules,agents/prompts,courier,store/migrations,orchestrator,lib}`, `tests/{unit,contract,integration,fakes,fixtures/emails}`)
+- [X] T002 Initialize `package.json` (type: module, engines node ≥22, scripts: build, start, run-once, check-config, test, lint, typecheck) and install pinned deps from research.md
+- [X] T003 [P] Add `tsconfig.json` (strict, NodeNext, outDir `dist`) and a `tsx` dev runner
+- [X] T004 [P] Configure ESLint + Prettier (`eslint.config.js`, `.prettierrc`)
+- [X] T005 [P] Configure Vitest (`vitest.config.ts`) with `tests/` globs and coverage
+- [X] T006 [P] Update `.gitignore` (`data/`, `.env`, `config.json`, `dist/`)
 
 ---
 
@@ -38,17 +38,17 @@ description: "Task list for AI Email Assistant (Self-hosted)"
 
 **Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
 
-- [ ] T007 Define domain types (IncomingEmail, RuleDecision, ClassificationResult, AnalysisResult, ProcessedRecord, MailboxState) in `src/domain/types.ts`
-- [ ] T008 Define ports (MailSource, ReportChannel, HttpFetch, LlmClient, Store, Clock) and the Report type in `src/domain/ports.ts` per contracts/ports.contract.md
-- [ ] T009 [P] Implement the zod config schema (incl. `delivery` block, at least one channel enabled) in `src/config/schema.ts` per contracts/config.schema.md
-- [ ] T010 Implement the config loader (read file, apply defaults, resolve `*_env` secrets, error messages with field paths) in `src/config/load.ts`
-- [ ] T011 [P] Contract tests for the config schema (valid, missing fields, unset env, unknown keys) in `tests/contract/config.test.ts`
-- [ ] T012 [P] Logger with secret redaction in `src/lib/logger.ts`, plus a unit test confirming no secrets in output in `tests/unit/logger.test.ts`
-- [ ] T013 [P] Retry/backoff helper and semaphore in `src/lib/retry.ts` + `tests/unit/retry.test.ts`
-- [ ] T014 SQLite store: migrations (`mailbox_state`, `processed_messages`, `pending_reports`, `deliveries`, `meta` with install_id, `schema_migrations`) and Store impl in `src/store/sqlite-store.ts`, `src/store/migrations/001_init.sql`
-- [ ] T015 [P] Store unit tests (idempotent record, isProcessed by UID and by Message-ID, pending report lifecycle, completeReport atomicity, purge) in `tests/unit/store.test.ts`
-- [ ] T016 [P] Test fakes: FakeMailSource, FakeChannel (scriptable failures, records deliveries), FakeHttpFetch, FakeLlm (scripted), FakeClock in `tests/fakes/`
-- [ ] T017 [P] Email fixtures (`important-deadline.eml`, `promo.eml`, `phishing.eml`, `injection.eml`, `huge-html.eml`, `no-body-attachment.eml`, `vietnamese.eml`) in `tests/fixtures/emails/`
+- [X] T007 Define domain types (IncomingEmail, RuleDecision, ClassificationResult, AnalysisResult, ProcessedRecord, MailboxState) in `src/domain/types.ts`
+- [X] T008 Define ports (MailSource, ReportChannel, HttpFetch, LlmClient, Store, Clock) and the Report type in `src/domain/ports.ts` per contracts/ports.contract.md
+- [X] T009 [P] Implement the zod config schema (incl. `delivery` block, at least one channel enabled) in `src/config/schema.ts` per contracts/config.schema.md
+- [X] T010 Implement the config loader (read file, apply defaults, resolve `*_env` secrets, error messages with field paths) in `src/config/load.ts`
+- [X] T011 [P] Contract tests for the config schema (valid, missing fields, unset env, unknown keys) in `tests/contract/config.test.ts`
+- [X] T012 [P] Logger with secret redaction in `src/lib/logger.ts`, plus a unit test confirming no secrets in output in `tests/unit/logger.test.ts`
+- [X] T013 [P] Retry/backoff helper and semaphore in `src/lib/retry.ts` + `tests/unit/retry.test.ts`
+- [X] T014 SQLite store: migrations (`mailbox_state`, `processed_messages`, `pending_reports`, `deliveries`, `meta` with install_id, `schema_migrations`) and Store impl in `src/store/sqlite-store.ts`, `src/store/migrations/001_init.sql`
+- [X] T015 [P] Store unit tests (idempotent record, isProcessed by UID and by Message-ID, pending report lifecycle, completeReport atomicity, purge) in `tests/unit/store.test.ts`
+- [X] T016 [P] Test fakes: FakeMailSource, FakeChannel (scriptable failures, records deliveries), FakeHttpFetch, FakeLlm (scripted), FakeClock in `tests/fakes/`
+- [X] T017 [P] Email fixtures (`important-deadline.eml`, `promo.eml`, `phishing.eml`, `injection.eml`, `huge-html.eml`, `no-body-attachment.eml`, `vietnamese.eml`) in `tests/fixtures/emails/`
 
 **Checkpoint**: Config, store, logging and test fakes are ready.
 
@@ -62,24 +62,24 @@ description: "Task list for AI Email Assistant (Self-hosted)"
 
 ### Tests for User Story 1
 
-- [ ] T018 [P] [US1] Unit tests for cleaning (HTML→text, reply-chain strip, truncation flag, attachments list) in `tests/unit/clean.test.ts`
-- [ ] T019 [P] [US1] Contract tests for the Gatekeeper output schema (valid and malformed fixtures) in `tests/contract/gatekeeper.test.ts`
-- [ ] T020 [P] [US1] Contract tests for the Analyst output schema in `tests/contract/analyst.test.ts`
-- [ ] T021 [P] [US1] Email render tests (snapshot HTML + text, escaping of `<script>` in subject or summary, urgent prefix, truncated note, marker headers present) in `tests/unit/email-render.test.ts`
-- [ ] T022 [US1] Pipeline integration test: important → FORWARDED, restart → no duplicate, Analyst failure → FALLBACK_FORWARDED, SMTP failure → not recorded and retried on next poll, first run processes only mail inside the look-back window (FR-019), UIDVALIDITY change → re-baseline with no reprocessing, in `tests/integration/pipeline.test.ts`
+- [X] T018 [P] [US1] Unit tests for cleaning (HTML→text, reply-chain strip, truncation flag, attachments list) in `tests/unit/clean.test.ts`
+- [X] T019 [P] [US1] Contract tests for the Gatekeeper output schema (valid and malformed fixtures) in `tests/contract/gatekeeper.test.ts`
+- [X] T020 [P] [US1] Contract tests for the Analyst output schema in `tests/contract/analyst.test.ts`
+- [X] T021 [P] [US1] Email render tests (snapshot HTML + text, escaping of `<script>` in subject or summary, urgent prefix, truncated note, marker headers present) in `tests/unit/email-render.test.ts`
+- [X] T022 [US1] Pipeline integration test: important → FORWARDED, restart → no duplicate, Analyst failure → FALLBACK_FORWARDED, SMTP failure → not recorded and retried on next poll, first run processes only mail inside the look-back window (FR-019), UIDVALIDITY change → re-baseline with no reprocessing, in `tests/integration/pipeline.test.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T023 [P] [US1] Email cleaning (mailparser + html-to-text + truncation) in `src/fetcher/clean.ts`
-- [ ] T024 [P] [US1] IMAP MailSource (imapflow, `readOnly: true`, UID fetch with PEEK, UIDVALIDITY handling, first-run baseline/look-back) in `src/fetcher/imap-source.ts`
-- [ ] T025 [P] [US1] LlmClient adapter (AI SDK provider factory for openai/anthropic/google, structured output + zod re-validation, usage) in `src/agents/llm.ts`. First confirm the current v7 structured-output API (research R4)
-- [ ] T026 [P] [US1] Gatekeeper prompt `src/agents/prompts/gatekeeper.v1.md` + `src/agents/gatekeeper.ts` (`<email>` data wrapping, temp 0, failure → IMPORTANT)
-- [ ] T027 [P] [US1] Analyst prompt `src/agents/prompts/analyst.v1.md` + `src/agents/analyst.ts` (target language, no-translate-if-same, null deadlines)
-- [ ] T028 [P] [US1] Report builder `src/courier/report.ts` + email renderer (summary + fallback templates, inline CSS, escapeHtml, text alternative) in `src/courier/channels/email/render.ts`
-- [ ] T029 [P] [US1] Email ReportChannel (nodemailer, TLS, Reply-To, In-Reply-To/References, `X-Mail-Me` self-sent marker + `Auto-Submitted`, X-Mail-Me-Source, verify()) in `src/courier/channels/email/smtp-channel.ts`
-- [ ] T030 [US1] Pipeline orchestration (per-email flow, build Report → savePendingReport → deliver via email channel → completeReport, advance `last_seen_uid` over the contiguous prefix of recorded UIDs) in `src/orchestrator/pipeline.ts`
-- [ ] T031 [US1] Polling scheduler (setTimeout loop, no overlap) and CLI `start` / `run-once` in `src/orchestrator/scheduler.ts`, `src/index.ts`
-- [ ] T032 [US1] Per-email decision logging (category, confidence, outcome, tokens, latency, no body) in `src/orchestrator/pipeline.ts`
+- [X] T023 [P] [US1] Email cleaning (mailparser + html-to-text + truncation) in `src/fetcher/clean.ts`
+- [X] T024 [P] [US1] IMAP MailSource (imapflow, `readOnly: true`, UID fetch with PEEK, UIDVALIDITY handling, first-run baseline/look-back) in `src/fetcher/imap-source.ts`
+- [X] T025 [P] [US1] LlmClient adapter (AI SDK provider factory for openai/anthropic/google, structured output + zod re-validation, usage) in `src/agents/llm.ts`. First confirm the current v7 structured-output API (research R4)
+- [X] T026 [P] [US1] Gatekeeper prompt `src/agents/prompts/gatekeeper.v1.md` + `src/agents/gatekeeper.ts` (`<email>` data wrapping, temp 0, failure → IMPORTANT)
+- [X] T027 [P] [US1] Analyst prompt `src/agents/prompts/analyst.v1.md` + `src/agents/analyst.ts` (target language, no-translate-if-same, null deadlines)
+- [X] T028 [P] [US1] Report builder `src/courier/report.ts` + email renderer (summary + fallback templates, inline CSS, escapeHtml, text alternative) in `src/courier/channels/email/render.ts`
+- [X] T029 [P] [US1] Email ReportChannel (nodemailer, TLS, Reply-To, In-Reply-To/References, `X-Mail-Me` self-sent marker + `Auto-Submitted`, X-Mail-Me-Source, verify()) in `src/courier/channels/email/smtp-channel.ts`
+- [X] T030 [US1] Pipeline orchestration (per-email flow, build Report → savePendingReport → deliver via email channel → completeReport, advance `last_seen_uid` over the contiguous prefix of recorded UIDs) in `src/orchestrator/pipeline.ts`
+- [X] T031 [US1] Polling scheduler (setTimeout loop, no overlap) and CLI `start` / `run-once` in `src/orchestrator/scheduler.ts`, `src/index.ts`
+- [X] T032 [US1] Per-email decision logging (category, confidence, outcome, tokens, latency, no body) in `src/orchestrator/pipeline.ts`
 
 **Checkpoint**: MVP works end to end for one mailbox through the email channel. Until US3's loop protection lands, use a report address that is **not** monitored.
 
@@ -100,7 +100,7 @@ description: "Task list for AI Email Assistant (Self-hosted)"
 ### Implementation for User Story 2
 
 - [ ] T036 [US2] Rules engine in `src/rules/engine.ts`
-- [ ] T037 [US2] Apply `confidence_threshold` in `src/agents/gatekeeper.ts`
+- [X] T037 [US2] Apply `confidence_threshold` in `src/agents/gatekeeper.ts` _(done with US1: threshold applied in `classify()`)_
 - [ ] T038 [US2] Wire rules into the pipeline before the Gatekeeper and record SKIPPED outcomes in `src/orchestrator/pipeline.ts`
 
 **Checkpoint**: Noise filtering works and rule hits cost nothing.
@@ -125,13 +125,13 @@ description: "Task list for AI Email Assistant (Self-hosted)"
 ### Implementation for User Story 3
 
 - [ ] T040 [US3] One scheduler loop per account/mailbox with per-account error isolation and backoff in `src/orchestrator/scheduler.ts`
-- [ ] T041 [US3] Bounded LLM concurrency shared across accounts (semaphore from T013) in `src/agents/llm.ts`
+- [X] T041 [US3] Bounded LLM concurrency shared across accounts (semaphore from T013) in `src/agents/llm.ts` _(done with US1: one shared semaphore in `AiSdkLlmClient`)_
 - [ ] T042 [US3] Source account label in both renderers (email header line + `X-Mail-Me-Source`, Telegram 📥 line) in `src/courier/channels/*/render.ts`
 - [ ] T059 [US3] Address normalization + "report address is not monitored" refinement in `src/config/schema.ts` (helper in `src/config/address.ts`)
-- [ ] T060 [US3] SELF_SENT rule (first rule after ALREADY_PROCESSED, compares install_id from Store) in `src/rules/engine.ts`. Expose headers in `src/fetcher/imap-source.ts`
+- [X] T060 [US3] SELF_SENT rule (first rule after ALREADY_PROCESSED, compares install_id from Store) in `src/rules/engine.ts`. Expose headers in `src/fetcher/imap-source.ts` _(pulled into US1 so the MVP cannot loop on its own reports)_
 - [ ] T061 [P] [US3] Telegram renderer (HTML subset, escaping, shorten/split) in `src/courier/channels/telegram/render.ts`
 - [ ] T062 [P] [US3] Telegram ReportChannel (Bot API via fetch, per-chat 1 msg/s throttle, parts_sent resume, error classification, token redaction, verify()) in `src/courier/channels/telegram/telegram-channel.ts`
-- [ ] T063 [US3] Dispatcher (fan-out to enabled channels in parallel, per-channel status/attempts/next_attempt_at, give up at max_attempts, completeReport) in `src/courier/dispatcher.ts`, and drain pending reports at the start of each poll in `src/orchestrator/pipeline.ts`
+- [X] T063 [US3] Dispatcher (fan-out to enabled channels in parallel, per-channel status/attempts/next_attempt_at, give up at max_attempts, completeReport) in `src/courier/dispatcher.ts`, and drain pending reports at the start of each poll in `src/orchestrator/pipeline.ts` _(core landed with US1 in `src/courier/dispatcher.ts`; T058 multi-channel test still open)_
 - [ ] T064 [US3] Channel factory from config + startup `verify()` (logged, non-blocking) in `src/courier/channels/index.ts`
 - [ ] T065 [P] [US3] CLI `check-delivery` (verify + send test report to each enabled channel) and `telegram-chat-id` (getUpdates → print chat IDs) in `src/index.ts`
 
@@ -146,7 +146,7 @@ description: "Task list for AI Email Assistant (Self-hosted)"
 **Independent Test**: `check-config` passes on an edited example and fails with field-named messages on invalid variants. Separate models per role are verified with FakeLlm.
 
 - [ ] T043 [P] [US4] `config.example.json` (no secrets, plain JSON, email enabled + telegram disabled) and `.env.example` (incl. `TELEGRAM_BOT_TOKEN`) at repo root
-- [ ] T044 [P] [US4] `check-config` CLI command (exit 0 / exit 2 with message) in `src/index.ts`
+- [X] T044 [P] [US4] `check-config` CLI command (exit 0 / exit 2 with message) in `src/index.ts` _(done with US1)_
 - [ ] T045 [P] [US4] Test that the gatekeeper and analyst roles use their own configured provider and model, in `tests/integration/roles.test.ts`
 - [ ] T046 [US4] `Dockerfile` (multi-stage, non-root, `/app/data` volume) and `docker-compose.yml`
 - [ ] T047 [US4] README: overview, architecture diagram, quickstart (from quickstart.md), privacy notes (incl. Telegram not end-to-end encrypted), Gmail app-password guide, Telegram bot setup
@@ -158,10 +158,10 @@ description: "Task list for AI Email Assistant (Self-hosted)"
 ## Phase 7: Polish & Cross-Cutting Concerns
 
 - [ ] T048 [P] Daily retention purge job (`storage.retention_days`) in `src/orchestrator/scheduler.ts`
-- [ ] T049 [P] Optional GreenMail E2E (`E2E=1`) in `tests/e2e/greenmail.test.ts` with a docker-compose test profile. Asserts that source messages stay unseen, unmoved and unflagged (FR-013)
+- [ ] T049 [P] Optional GreenMail E2E _(test written with US1: `npm run test:e2e`; docker-compose profile still open)_ (`E2E=1`) in `tests/e2e/greenmail.test.ts` with a docker-compose test profile. Asserts that source messages stay unseen, unmoved and unflagged (FR-013)
 - [ ] T050 [P] Gatekeeper evaluation script on a labeled `.eml` set (measures SC-003) in `scripts/eval-gatekeeper.ts`
 - [ ] T051 [P] GitHub Actions CI: typecheck, lint, test in `.github/workflows/ci.yml`
-- [ ] T052 Graceful shutdown (SIGTERM: finish the in-flight email, close IMAP and DB) in `src/index.ts`
+- [X] T052 Graceful shutdown (SIGTERM: finish the in-flight email, close IMAP and DB) in `src/index.ts` _(done with US1: SIGINT/SIGTERM waits for the current pass, then closes the DB)_
 - [ ] T053 Run the quickstart.md validation manually against a real mailbox
 
 ---

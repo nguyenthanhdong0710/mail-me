@@ -19,7 +19,7 @@ better-sqlite3 13.0.x, pino 10.4.x, vitest 5.0.x, typescript 7.0.x. Pin exact ve
 - **Rationale**: Saves tokens. Removing reply chains cuts a lot of noise.
 
 ## R4. LLM abstraction and structured output
-- **Decision**: Vercel AI SDK (`ai` v7) with provider packages for OpenAI, Anthropic and Google. Use structured output with a zod schema: the SDK's object-output API, either `generateText` with `Output.object` or `generateObject`. **Confirm which API is current in v7 when implementing.** Always re-validate the result with zod ourselves.
+- **Decision**: Vercel AI SDK (`ai` v7) with provider packages for OpenAI, Anthropic and Google. Use structured output with a zod schema: the SDK's object-output API, either `generateText` with `Output.object` or `generateObject`. **Confirmed (2026-10-29, ai 7.0.156): `generateText({ instructions, prompt, output: Output.object({ schema }) })` → `result.output`. `generateObject` and `system` are deprecated.** Always re-validate the result with zod ourselves.
 - **Rationale**: One interface for every provider (FR-015), native schema support, and it reports token usage for logs.
 - **Alternatives**: LangChain.js (heavier, more abstraction than needed). Raw provider SDKs (three separate code paths).
 - **Model defaults** (config example only; users choose their own): Gatekeeper uses a small or fast model, Analyst uses a stronger model. Model IDs are always read from config and never hardcoded.
