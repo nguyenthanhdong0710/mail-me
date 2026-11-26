@@ -115,7 +115,10 @@ You do this once; it can serve all your Gmail accounts.
 1. In the [Google Cloud console](https://console.cloud.google.com/), create a project (any name).
 2. [Enable the Gmail API](https://console.cloud.google.com/apis/library/gmail.googleapis.com) for it.
 3. Open [Google Auth Platform → Branding / Audience](https://console.cloud.google.com/auth/overview) and configure the consent screen: user type **External**, an app name, and your address as the support and developer contact. Under **Audience**, add your Gmail address(es) as test users.
-4. Under **Data access**, add the scope `https://www.googleapis.com/auth/gmail.readonly`. Only if you will **send** email reports from a Gmail account, also add `https://www.googleapis.com/auth/gmail.send`.
+4. Under **Data access**, add the scope `https://www.googleapis.com/auth/gmail.readonly`. If you will send email reports from a Gmail account with a send-only sign-in (the recommended way, [step 2e](#e-only-if-you-use-email-reports-a-sending-account)), also add `https://www.googleapis.com/auth/gmail.send`. Skip it if you send over SMTP or only use Telegram.
+
+   This list only says what the app **may** ask for; it grants nothing by itself. Each sign-in asks for exactly one of these scopes, so your monitored accounts get read-only access and never `gmail.send`. mail-me rejects a read sign-in that carries any other Gmail permission, and a send sign-in that can read.
+
 5. Under **Clients**, create an OAuth client of type **Desktop app**. Copy the **client ID** into `config.json` (`auth.google.client_id`) and the **client secret** into `.env` (`GOOGLE_OAUTH_CLIENT_SECRET`).
 6. **Avoid weekly sign-outs:** under **Audience**, click **Publish app** so the status is **In production**. Apps left in _Testing_ get sign-ins that expire after 7 days. A personal app with fewer than 100 users needs no Google review; the consent screen just shows a "Google hasn't verified this app" warning. Since it is your own app, click **Advanced → Go to (your app)** to continue.
 
@@ -175,10 +178,17 @@ stronger one.
 
 ### e) Only if you use email reports: a sending account
 
-Reports are sent from an account you choose, to an address that is **not** monitored. Pick one:
+Reports are sent from an account you choose, to an address that is **not** monitored. Pick one
+(`delivery.email.oauth` or `delivery.email.smtp`, not both):
 
-- **Recommended: Gmail or Microsoft with a send-only sign-in.** No password. It uses the same OAuth app as above (with the `gmail.send` or `Mail.Send` permission added) and a **separate** grant that can only send, never read. You sign in with `mail-me auth --email-channel` in step 4.
-- **SMTP with an app password**, for any other provider.
+- **Recommended: Gmail or Microsoft with a send-only sign-in** (`delivery.email.oauth`). No password
+  is stored. It reuses the OAuth app from step 2a / 2b with `gmail.send` (Gmail) or `Mail.Send`
+  (Microsoft) added, and creates a **separate** sign-in that can only send, never read. The
+  sending account can also be one of your monitored accounts: its read sign-in stays read-only.
+  You sign in with `mail-me auth --email-channel` in step 4.
+- **SMTP with an app password** (`delivery.email.smtp`), only for providers without OAuth. Avoid it
+  for Gmail: a Gmail app password can read, send and delete all your mail, and it sits in `.env`.
+  With SMTP you don't need `gmail.send`.
 
 Skip this if you only use Telegram.
 
@@ -359,8 +369,10 @@ your calendar); if it asks for more, stop and check step 2a. After you approve:
 consent screen must ask only to read your mail and profile. No port is needed:
 `docker compose run --rm mail-me auth work`.
 
-**Email reports with OAuth:** sign in the sending account the same way, with
-`mail-me auth --email-channel`. That grant can only send.
+**Email reports with OAuth:** sign in the sending account (`delivery.email.oauth.user`) the same
+way, with `mail-me auth --email-channel`. The consent screen must ask only to send email (Gmail
+also asks for your address). That grant can only send. If Google says the scope is not allowed,
+add `gmail.send` under **Data access** ([step 2a](#a-gmail-register-your-own-google-oauth-app), item 4).
 
 On success you see `✓ Signed in … with read-only mail access. Saved to data/grants/school.read.json`.
 Nothing is saved if you signed in with a different account than the config says.
@@ -577,27 +589,29 @@ Every AI call logs one line, and every email logs its total:
 
 ## Troubleshooting
 
-| Symptom                                                                 | Fix                                                                                                                                                                                                          |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Invalid config: <field> — …`                                           | The message names the exact field. Fix it in `config.json`, or set the missing variable in `.env`                                                                                                            |
-| `delivery — enable at least one channel`                                | Set `delivery.email.enabled` or `delivery.telegram.enabled` to `true`                                                                                                                                        |
-| `accounts[0] ("school"): not signed in. Run: mail-me auth school`       | Run that command ([step 4](#step-4-sign-in-your-gmail--outlook-accounts))                                                                                                                                    |
-| Log: `sign-in revoked or expired, run mail-me auth <id>`                | Run the command again. Mail that arrived meanwhile is still reported. If this happens every week, your Google app is still in _Testing_: publish it ([step 2a](#a-gmail-register-your-own-google-oauth-app)) |
-| `signed in as other@…, but the config says …`                           | You approved with another account. Run `mail-me auth <id>` again and pick the right account (Gmail prefills it)                                                                                              |
-| `the grant was issued to a different OAuth app`                         | You changed `client_id`. Sign in again                                                                                                                                                                       |
-| Sign-in: "administrator must approve this app"                          | Your Microsoft 365 organization blocks user consent. See [admin approval](#microsoft-365-admin-approval)                                                                                                     |
-| Browser shows `127.0.0.1 refused to connect` after Google consent       | Expected when mail-me runs on another machine: copy the page's full address and paste it into the terminal                                                                                                   |
-| `can be read by other users. Run: chmod 600 …`                          | Run the `chmod`. On a Windows drive (`/mnt/c`) move `data/` to the Linux filesystem                                                                                                                          |
-| `Microsoft turned off password sign-in`                                 | Use `"provider": "microsoft"` with OAuth; Outlook and Microsoft 365 no longer accept passwords                                                                                                               |
-| Password accounts: IMAP `auth failed` / `AUTHENTICATIONFAILED`          | Use an app password, not your normal password. Check that IMAP is allowed for the account                                                                                                                    |
-| `no price for model, cost unknown`                                      | Add the model under `ai.prices` ([AI cost](#ai-cost)), or ignore it: only the estimate is missing                                                                                                            |
-| `unknown command: docker compose` or `unknown flag: --rm`               | The Compose plugin is not installed. Install it (see [Prerequisites](#prerequisites)) or use [plain `docker run`](#without-docker-compose)                                                                   |
-| `not a Telegram bot token` or `telegram getUpdates: 404 Not Found`      | The token in `.env` is wrong or has quotes around it. Write it as `TELEGRAM_BOT_TOKEN=123456789:AA...`, with no quotes                                                                                       |
-| Telegram `chat not found`                                               | Send `/start` to your bot first, then check `chat_id`                                                                                                                                                        |
-| Telegram `Unauthorized`                                                 | The bot token is wrong or was revoked. Get a new one from @BotFather                                                                                                                                         |
-| Meeting times are off by some hours                                     | Set `timezone` in `config.json` (Docker runs in UTC)                                                                                                                                                         |
-| Nothing arrives                                                         | Check the logs (`docker compose logs mail-me` or `journalctl -u mail-me`). Each email logs one JSON line with its `decision` and `outcome`                                                                   |
-| Permission error on `/app/data` in Docker (`EACCES`, `SQLITE_CANTOPEN`) | `./data` is not writable by uid 1000. Run `sudo chown 1000:1000 data`                                                                                                                                        |
+| Symptom                                                                                  | Fix                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Invalid config: <field> — …`                                                            | The message names the exact field. Fix it in `config.json`, or set the missing variable in `.env`                                                                                                            |
+| `delivery — enable at least one channel`                                                 | Set `delivery.email.enabled` or `delivery.telegram.enabled` to `true`                                                                                                                                        |
+| `accounts[0] ("school"): not signed in. Run: mail-me auth school`                        | Run that command ([step 4](#step-4-sign-in-your-gmail--outlook-accounts))                                                                                                                                    |
+| Log: `sign-in revoked or expired, run mail-me auth <id>`                                 | Run the command again. Mail that arrived meanwhile is still reported. If this happens every week, your Google app is still in _Testing_: publish it ([step 2a](#a-gmail-register-your-own-google-oauth-app)) |
+| Google: `Error 401: invalid_client` / "The OAuth client was not found"                   | `auth.google.client_id` doesn't match a client in your Cloud project. Copy it again from **Clients**. A client created minutes ago can take a while to start working: wait and retry                         |
+| Google: `Error 403: access_denied` / "has not completed the Google verification process" | Your app is in _Testing_ and this account is not a test user. Publish the app ([step 2a](#a-gmail-register-your-own-google-oauth-app), item 6), or add the address under **Audience → Test users**           |
+| `signed in as other@…, but the config says …`                                            | You approved with another account. Run `mail-me auth <id>` again and pick the right account (Gmail prefills it)                                                                                              |
+| `the grant was issued to a different OAuth app`                                          | You changed `client_id`. Sign in again                                                                                                                                                                       |
+| Sign-in: "administrator must approve this app"                                           | Your Microsoft 365 organization blocks user consent. See [admin approval](#microsoft-365-admin-approval)                                                                                                     |
+| Browser shows `127.0.0.1 refused to connect` after Google consent                        | Expected when mail-me runs on another machine: copy the page's full address and paste it into the terminal                                                                                                   |
+| `can be read by other users. Run: chmod 600 …`                                           | Run the `chmod`. On a Windows drive (`/mnt/c`) move `data/` to the Linux filesystem                                                                                                                          |
+| `Microsoft turned off password sign-in`                                                  | Use `"provider": "microsoft"` with OAuth; Outlook and Microsoft 365 no longer accept passwords                                                                                                               |
+| Password accounts: IMAP `auth failed` / `AUTHENTICATIONFAILED`                           | Use an app password, not your normal password. Check that IMAP is allowed for the account                                                                                                                    |
+| `no price for model, cost unknown`                                                       | Add the model under `ai.prices` ([AI cost](#ai-cost)), or ignore it: only the estimate is missing                                                                                                            |
+| `unknown command: docker compose` or `unknown flag: --rm`                                | The Compose plugin is not installed. Install it (see [Prerequisites](#prerequisites)) or use [plain `docker run`](#without-docker-compose)                                                                   |
+| `not a Telegram bot token` or `telegram getUpdates: 404 Not Found`                       | The token in `.env` is wrong or has quotes around it. Write it as `TELEGRAM_BOT_TOKEN=123456789:AA...`, with no quotes                                                                                       |
+| Telegram `chat not found`                                                                | Send `/start` to your bot first, then check `chat_id`                                                                                                                                                        |
+| Telegram `Unauthorized`                                                                  | The bot token is wrong or was revoked. Get a new one from @BotFather                                                                                                                                         |
+| Meeting times are off by some hours                                                      | Set `timezone` in `config.json` (Docker runs in UTC)                                                                                                                                                         |
+| Nothing arrives                                                                          | Check the logs (`docker compose logs mail-me` or `journalctl -u mail-me`). Each email logs one JSON line with its `decision` and `outcome`                                                                   |
+| Permission error on `/app/data` in Docker (`EACCES`, `SQLITE_CANTOPEN`)                  | `./data` is not writable by uid 1000. Run `sudo chown 1000:1000 data`                                                                                                                                        |
 
 ## Upgrading from 001
 
