@@ -14,6 +14,21 @@ any meeting it mentions with one-click "add to calendar" links, and a link to op
 - **Cheap, and you can see the cost.** Whitelist and keyword rules run before any AI call, each AI role can use its own model, and the logs show the estimated cost of every AI call and every email.
 - **Private.** It runs as one process with a local SQLite file and no telemetry. Email content only goes to the AI provider and the delivery channels you configure.
 
+## See it in action
+
+Four emails arrive: a French email, a Black Friday promotion, an urgent meeting request and a
+normal request. Three short reports reach Telegram. The promotion is dropped by a keyword rule
+before any AI call.
+
+![4 emails arrive in Gmail, 3 summaries reach Telegram](docs/images/demo-overview.png)
+
+<details>
+<summary>Each email next to its report</summary>
+
+![Each original email next to the Telegram report it produced](docs/images/demo-before-after.png)
+
+</details>
+
 ## How it works
 
 ```text
