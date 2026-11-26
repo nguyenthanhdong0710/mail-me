@@ -154,3 +154,12 @@ config.json
 *.db
 *.db-wal
 *.db-shm
+
+# Terraform (deploy/oci)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+crash.log

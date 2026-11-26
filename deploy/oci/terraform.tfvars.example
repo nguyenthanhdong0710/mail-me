@@ -1,0 +1,25 @@
+# Copy to terraform.tfvars (git-ignored) and fill in. Nothing here is secret: mail passwords,
+# API keys and sign-ins are uploaded later with deploy/linux/push-config.sh, never through Terraform.
+
+# Profile menu → Tenancy → OCID
+tenancy_ocid = "ocid1.tenancy.oc1..aaaaaaaa..."
+
+# Your home region (Profile menu → Tenancy → Home region), e.g. "eu-frankfurt-1"
+region = "eu-frankfurt-1"
+
+# Contents of your SSH public key, e.g. `cat ~/.ssh/id_ed25519.pub`
+ssh_public_key = "ssh-ed25519 AAAA... you@laptop"
+
+# Optional: only allow SSH from your own address
+# ssh_source_cidr = "203.0.113.7/32"
+
+# Optional: create in a compartment other than the root one
+# compartment_ocid = "ocid1.compartment.oc1..aaaaaaaa..."
+
+# Optional: size, within the Always Free totals (4 OCPU, 24 GB memory, 200 GB disk per account)
+# ocpus                   = 1
+# memory_in_gbs           = 6
+# boot_volume_size_in_gbs = 50
+
+# Optional: try another availability domain on "Out of host capacity"
+# availability_domain_index = 1

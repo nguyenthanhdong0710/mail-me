@@ -419,6 +419,27 @@ Fix anything reported, and re-run until both commands succeed.
 
 ## Step 7: Run and host
 
+mail-me needs a machine that stays on. Choose where first, then how.
+
+### Where to host
+
+| Where                                                              | Cost               | Sign-up             | Main limitation                                        | Guide                                  |
+| ------------------------------------------------------------------ | ------------------ | ------------------- | ------------------------------------------------------ | -------------------------------------- |
+| **A computer you already have** (mini PC, old laptop, Pi 4/5, NAS) | Free (electricity) | None                | Must stay on; mail stays at home (most private)        | Options A–C below                      |
+| **Google Cloud free tier** (e2-micro, 1 GB)                        | Free               | Easy; card required | Small server in the US; one free server per account    | [deploy/gcp](deploy/gcp/README.md)     |
+| **Oracle Cloud Always Free** (Arm, up to 4 CPUs / 24 GB)           | Free               | Often rejected      | Free capacity is scarce; idle servers can be reclaimed | [deploy/oci](deploy/oci/README.md)     |
+| **Any VPS** (e.g. a Singapore or local provider)                   | Around $4–6/month  | Easy                | Costs a little                                         | [deploy/linux](deploy/linux/README.md) |
+
+**Recommendation:** use a computer you already have if one can stay on. Otherwise start with the
+**Google Cloud free tier**; if you prefer a server closer to you with no free-tier rules, rent a
+**small VPS**. Try Oracle only if its sign-up works for you.
+
+All three cloud options end the same way: from your mail-me folder,
+`deploy/linux/install.sh <user@server>` installs Docker and the code from your computer (no
+`git clone` on the server), then `deploy/linux/push-config.sh <user@server>` uploads your
+`config.json`, `.env` and sign-ins, checks them and starts mail-me. Your secrets never go through
+Terraform. See [Option D](#option-d-a-cloud-server-or-vps).
+
 ### Option A: Docker Compose (recommended)
 
 ```bash
@@ -499,6 +520,41 @@ If you prefer a scheduler you already run, `run-once` polls every account once a
 ```
 
 On the first start, only mail that arrives **after** startup is processed (unless you set `lookback_hours`).
+
+### Option D: A cloud server or VPS
+
+For a server you rent or get for free. Make sure `npm run check-config` passes on your computer
+first, then:
+
+```bash
+# Google Cloud free tier (or deploy/oci for Oracle); skip for a VPS you already have
+cd deploy/gcp && cp terraform.tfvars.example terraform.tfvars   # fill in 2 values
+terraform init && terraform apply && cd ../..
+
+# Any server: install, then upload settings and start
+deploy/linux/install.sh ubuntu@<server-ip>
+deploy/linux/push-config.sh ubuntu@<server-ip>
+```
+
+To update later: `git pull`, then run `install.sh` again. Settings, sign-ins and the database are
+kept. Guides: [any Linux server / VPS](deploy/linux/README.md) ·
+[Google Cloud free tier](deploy/gcp/README.md) · [Oracle Cloud Always Free](deploy/oci/README.md).
+
+#### Why not Vercel or another serverless platform?
+
+They are a poor fit, even on paid plans:
+
+- mail-me is a **long-running poller**. Serverless functions only run when a request comes in,
+  and only for a limited time.
+- It keeps its **SQLite database and OAuth sign-ins on disk** (`data/`), and updates them as it
+  runs. Serverless file systems are read-only or wiped between runs, so you would get duplicate
+  reports and lose sign-ins.
+- Scheduling `run-once` instead does not help: Vercel's free (Hobby) cron jobs run at most
+  **once a day**.
+
+Making it work would mean moving the database and sign-ins to hosted services and triggering runs
+from an outside scheduler. A small always-on server is simpler, and can be free (see
+[Where to host](#where-to-host)).
 
 ## Step 8: Check that it works
 

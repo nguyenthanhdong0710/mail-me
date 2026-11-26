@@ -1,0 +1,18 @@
+# Copy to terraform.tfvars (git-ignored) and fill in. Nothing here is secret: mail passwords,
+# API keys and sign-ins are uploaded later with deploy/linux/push-config.sh, never through Terraform.
+
+# Your project ID (Google Cloud console → project picker → ID column)
+project_id = "mail-me-123456"
+
+# Contents of your SSH public key, e.g. `cat ~/.ssh/id_ed25519.pub`
+ssh_public_key = "ssh-ed25519 AAAA... you@laptop"
+
+# Optional: free tier region: us-west1 (Oregon), us-central1 (Iowa, default) or us-east1 (South Carolina).
+# From Vietnam, us-west1 is the closest.
+# region = "us-west1"
+
+# Optional: only allow SSH from your own address
+# ssh_source_cidr = "203.0.113.7/32"
+
+# Optional: 10-30 GB (30 is free)
+# disk_size_gb = 30

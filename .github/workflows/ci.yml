@@ -56,3 +56,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t mail-me:ci .
+
+  infra:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [deploy/oci, deploy/gcp]
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false
+      - run: terraform validate
+      - run: terraform test
+
+  deploy-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck -x deploy/linux/*.sh deploy/linux/tests/*.sh
+      - run: deploy/linux/tests/test-scripts.sh
